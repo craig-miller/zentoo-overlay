@@ -1,0 +1,15 @@
+# Portage-generated caches, not part of the overlay
+metadata/md5-cache/
+metadata/dtd/
+metadata/glsa/
+metadata/news/
+
+# Distfiles never live in the overlay
+distfiles/
+packages/
+
+# Editor leftovers
+*.swp
+*.swo
+*~
+.DS_Store

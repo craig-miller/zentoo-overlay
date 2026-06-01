@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>craig@nextidea.io</email>
+		<name>Craig</name>
+	</maintainer>
+	<longdescription lang="en">
+		Binary distribution of dart-sass, the reference Sass compiler. Upstream
+		ships AOT-compiled native binaries for linux-x64, linux-arm, linux-arm64,
+		and linux-riscv64; this ebuild installs the appropriate one to
+		/opt/dart-sass/ with a /usr/bin/sass symlink. No Dart SDK or Node.js
+		runtime required.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">sass/dart-sass</remote-id>
+	</upstream>
+</pkgmetadata>

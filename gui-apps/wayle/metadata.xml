@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>craig@nextidea.io</email>
+		<name>Craig Miller</name>
+	</maintainer>
+	<longdescription>
+		Wayle is a Wayland desktop shell written in Rust with GTK4 and
+		Relm4. It ships the bar, notifications daemon, on-screen-display,
+		wallpaper, and device controls (audio, network, bluetooth,
+		battery, brightness, media) as built-in modules rather than
+		separate processes. Compositor-specific workspace modules
+		currently target Hyprland and Niri.
+
+		Configuration is a single TOML file with live reload, also
+		editable through the wayle-settings GUI or the `wayle config`
+		CLI.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">wayle-rs/wayle</remote-id>
+	</upstream>
+</pkgmetadata>
