@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>craig@nextidea.io</email>
+		<name>Craig Miller</name>
+	</maintainer>
+	<longdescription>
+		Ambient-light-driven auto-brightness daemon for Apple Silicon
+		MacBooks running Asahi Linux. Reads lux from the AOP ambient
+		light sensor (VD6286 via the aop_als kernel driver) and drives
+		both the display backlight (apple-panel-bl) and the keyboard
+		backlight (kbd_backlight) from one sensor reading. Features:
+		30 Hz exponential smoothing, per-channel manual override via
+		external-write detection (brightnessctl + compositor keybinds
+		work normally), and AC-vs-battery curve scaling.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">craig-miller/asahi-brightnessd</remote-id>
+	</upstream>
+</pkgmetadata>
