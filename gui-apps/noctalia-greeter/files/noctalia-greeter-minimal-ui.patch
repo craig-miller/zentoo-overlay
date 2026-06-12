@@ -1,5 +1,5 @@
 diff --git a/src/greeter/greeter_surface.cpp b/src/greeter/greeter_surface.cpp
-index 404e44a..43e4929 100644
+index 404e44a..c35e814 100644
 --- a/src/greeter/greeter_surface.cpp
 +++ b/src/greeter/greeter_surface.cpp
 @@ -400,7 +400,8 @@ void GreeterSurface::initialize(RenderContext *context) {
@@ -31,7 +31,35 @@ index 404e44a..43e4929 100644
    }
  
    const float panelWidth =
-@@ -875,9 +869,16 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -810,13 +804,8 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+       std::clamp(1.0f - (userCount - 2.0f) * 0.08f, 0.75f, 1.0f);
+   const float headerGlyphSize = Style::scaled(kHeaderUserIconBase) * glyphScale;
+ 
+-  if (m_passwordVisible && !m_users.empty() &&
+-      m_selectedUser < m_users.size()) {
+-    m_formSubtitleLabel->setText(m_users[m_selectedUser]);
+-    m_formSubtitleLabel->setVisible(true);
+-  } else {
+-    m_formSubtitleLabel->setVisible(false);
+-  }
++  // zentoo minimal UI: hide the username subtitle under the password field.
++  m_formSubtitleLabel->setVisible(false);
+   if (m_formSubtitleLabel->visible()) {
+     m_formSubtitleLabel->measure(*renderer);
+   }
+@@ -826,7 +815,10 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+                                 ? (6.0f + m_formSubtitleLabel->height())
+                                 : 0.0f;
+   const float headerTopPadding = Style::spaceSm();
+-  const float headerGlyphBlock = headerGlyphSize + Style::spaceMd();
++  // zentoo minimal UI: collapse the header avatar/glyph block to zero so the
++  // panel sits tightly around the password field. The avatar/glyph themselves
++  // are hidden after the syncHeaderUserAvatar() call below.
++  const float headerGlyphBlock = 0.0f;
+   const float headerToContentGap = Style::spaceLg();
+   const float headerBlockHeight =
+       headerTopPadding + headerGlyphBlock + subtitleGap + headerToContentGap;
+@@ -875,9 +867,16 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
  
    float headerY = panelY + panelTopPadding + headerTopPadding;
  
@@ -48,7 +76,21 @@ index 404e44a..43e4929 100644
  
    // Refresh text colors each layout for theme/scheme changes.
    m_formSubtitleLabel->setColor(colorForRole(ColorRole::OnSurface));
-@@ -933,6 +934,11 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -894,6 +893,13 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   }
+ 
+   syncHeaderUserAvatar(*renderer, headerGlyphSize, panelX, panelWidth, headerY);
++  // zentoo minimal UI: hide the header user avatar/glyph (person image).
++  if (m_headerUserGlyph != nullptr) {
++    m_headerUserGlyph->setVisible(false);
++  }
++  if (m_headerUserAvatar != nullptr) {
++    m_headerUserAvatar->setVisible(false);
++  }
+   headerY += headerGlyphBlock;
+ 
+   if (m_formSubtitleLabel->visible()) {
+@@ -933,6 +939,11 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
    if (m_schemeSelectLabel != nullptr) {
      m_schemeSelectLabel->setVisible(false);
    }
@@ -60,7 +102,7 @@ index 404e44a..43e4929 100644
  
    m_userSelectBox->setVisible(false);
    m_userSelectLabel->setVisible(false);
-@@ -976,8 +982,10 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -976,8 +987,10 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
    }
  
    m_passwordField->setVisible(m_passwordVisible);
@@ -73,7 +115,7 @@ index 404e44a..43e4929 100644
    if (m_passwordVisible) {
      const float backSize = Style::controlHeight();
      m_backButton->setSize(backSize, backSize);
-@@ -1024,10 +1032,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -1024,10 +1037,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
      m_backButton->setVisible(false);
    }
  
@@ -98,7 +140,7 @@ index 404e44a..43e4929 100644
  
    if (hasStatus) {
      const float statusY = contentTop + contentBlockHeight + statusGap;
-@@ -1047,6 +1065,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -1047,6 +1070,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
    // Place initial keyboard focus on the last-used user so a returning user can
    // type their password immediately. Done here because the user rows only have
    // valid focus targets once the scene has been laid out.
