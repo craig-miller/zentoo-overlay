@@ -48,6 +48,10 @@ BDEPEND="
 
 DOCS=( README.md CREDITS.md example.toml )
 
+PATCHES=(
+	"${FILESDIR}"/noctalia-shell-brightness-suppress-ipc.patch
+)
+
 src_configure() {
 	local emesonargs=(
 			$(meson_feature jemalloc)
