@@ -1,0 +1,123 @@
+diff --git a/src/greeter/greeter_surface.cpp b/src/greeter/greeter_surface.cpp
+index 404e44a..62dc5b0 100644
+--- a/src/greeter/greeter_surface.cpp
++++ b/src/greeter/greeter_surface.cpp
+@@ -787,16 +787,9 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+     m_backdrop->setVisible(true);
+   }
+ 
++  // zentoo minimal UI: hide the bottom Noctalia logo.
+   if (m_bottomBrandLogo != nullptr) {
+-    const bool hasBrandLogo = m_brandLogoTexture.id != 0;
+-    m_bottomBrandLogo->setVisible(hasBrandLogo);
+-    if (hasBrandLogo) {
+-      const float logoSize = Style::scaled(64.0f);
+-      m_bottomBrandLogo->setSize(logoSize, logoSize);
+-      m_bottomBrandLogo->setPosition(ox + std::round((sw - logoSize) * 0.5f),
+-                                     oy + sh - logoSize - Style::spaceLg());
+-      m_bottomBrandLogo->setTint(colorForRole(ColorRole::OnSurface, 0.88f));
+-    }
++    m_bottomBrandLogo->setVisible(false);
+   }
+ 
+   const float panelWidth =
+@@ -875,9 +868,16 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+ 
+   float headerY = panelY + panelTopPadding + headerTopPadding;
+ 
++  // zentoo minimal UI: hide the brand pane and its labels.
+   if (m_brandPane != nullptr) {
+     static_cast<RectNode *>(m_brandPane)->setVisible(false);
+   }
++  if (m_brandTitleLabel != nullptr) {
++    m_brandTitleLabel->setVisible(false);
++  }
++  if (m_brandSubtitleLabel != nullptr) {
++    m_brandSubtitleLabel->setVisible(false);
++  }
+ 
+   // Refresh text colors each layout for theme/scheme changes.
+   m_formSubtitleLabel->setColor(colorForRole(ColorRole::OnSurface));
+@@ -933,6 +933,11 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   if (m_schemeSelectLabel != nullptr) {
+     m_schemeSelectLabel->setVisible(false);
+   }
++  // zentoo minimal UI: hide the scheme picker (greeter uses scheme= from greeter.conf).
++  if (m_schemeSelectBox != nullptr)   m_schemeSelectBox->setVisible(false);
++  if (m_schemeSelectIcon != nullptr)  m_schemeSelectIcon->setVisible(false);
++  if (m_schemeSelectGlyph != nullptr) m_schemeSelectGlyph->setVisible(false);
++  if (m_schemeSelectArea != nullptr)  m_schemeSelectArea->setVisible(false);
+ 
+   m_userSelectBox->setVisible(false);
+   m_userSelectLabel->setVisible(false);
+@@ -976,8 +981,10 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   }
+ 
+   m_passwordField->setVisible(m_passwordVisible);
+-  m_loginButton->setVisible(m_passwordVisible);
+-  m_backButton->setVisible(m_passwordVisible);
++  // zentoo minimal UI: Enter on the password field submits, so hide the login
++  // button. Single-user has no user-row step to go back to, so hide back too.
++  m_loginButton->setVisible(false);
++  m_backButton->setVisible(false);
+   if (m_passwordVisible) {
+     const float backSize = Style::controlHeight();
+     m_backButton->setSize(backSize, backSize);
+@@ -1024,10 +1031,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+     m_backButton->setVisible(false);
+   }
+ 
+-  const float sessionY =
+-      m_passwordVisible ? (contentTop + Style::controlHeight() + sessionRowGap)
+-                        : (contentTop + userListHeight + sessionRowGap);
+-  layoutPanelSessionSelector(contentLeft, sessionY, contentWidth, sessionRowH);
++  // zentoo minimal UI: only render the session/WM picker when there's a real
++  // choice to make. Install a second Wayland session and it reappears.
++  if (m_sessions.size() > 1) {
++    const float sessionY =
++        m_passwordVisible ? (contentTop + Style::controlHeight() + sessionRowGap)
++                          : (contentTop + userListHeight + sessionRowGap);
++    layoutPanelSessionSelector(contentLeft, sessionY, contentWidth, sessionRowH);
++  } else {
++    if (m_sessionSelectBox != nullptr)   m_sessionSelectBox->setVisible(false);
++    if (m_sessionSelectLabel != nullptr) m_sessionSelectLabel->setVisible(false);
++    if (m_sessionSelectIcon != nullptr)  m_sessionSelectIcon->setVisible(false);
++    if (m_sessionSelectGlyph != nullptr) m_sessionSelectGlyph->setVisible(false);
++    if (m_sessionSelectArea != nullptr)  m_sessionSelectArea->setVisible(false);
++  }
+ 
+   if (hasStatus) {
+     const float statusY = contentTop + contentBlockHeight + statusGap;
+@@ -1047,6 +1064,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   // Place initial keyboard focus on the last-used user so a returning user can
+   // type their password immediately. Done here because the user rows only have
+   // valid focus targets once the scene has been laid out.
++  // zentoo minimal UI: when starting in the password step (single-user
++  // auto-flip), land initial focus on the password field directly.
++  if (!m_initialFocusDone && m_passwordVisible && !m_focusRing.empty() &&
++      m_passwordField != nullptr && m_passwordField->inputArea() != nullptr) {
++    std::ptrdiff_t initial = 0;
++    for (std::size_t i = 0; i < m_focusRing.size(); ++i) {
++      if (m_focusRing[i].area == m_passwordField->inputArea()) {
++        initial = static_cast<std::ptrdiff_t>(i);
++        break;
++      }
++    }
++    setFocusIndex(initial);
++    m_initialFocusDone = true;
++  }
+   if (!m_initialFocusDone && !m_passwordVisible && !m_focusRing.empty()) {
+     std::ptrdiff_t initial = 0;
+     for (std::size_t i = 0; i < m_focusRing.size(); ++i) {
+@@ -1277,6 +1308,11 @@ void GreeterSurface::loadUsers() {
+ 
+   m_selectedUser = 0;
+   setUsername(m_users[m_selectedUser]);
++
++  // zentoo minimal UI: skip the user-row step on single-user systems.
++  if (m_users.size() == 1) {
++    m_passwordVisible = true;
++  }
+ }
+ 
+ void GreeterSurface::loadSessions() {
