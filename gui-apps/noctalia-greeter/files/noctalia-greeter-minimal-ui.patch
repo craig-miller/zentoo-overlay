@@ -1,8 +1,18 @@
 diff --git a/src/greeter/greeter_surface.cpp b/src/greeter/greeter_surface.cpp
-index 404e44a..62dc5b0 100644
+index 404e44a..43e4929 100644
 --- a/src/greeter/greeter_surface.cpp
 +++ b/src/greeter/greeter_surface.cpp
-@@ -787,16 +787,9 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -400,7 +400,8 @@ void GreeterSurface::initialize(RenderContext *context) {
+   }
+   applyScheme(m_selectedScheme);
+   refreshSelectionLabels();
+-  m_passwordVisible = false;
++  // zentoo minimal UI: start in the password step on single-user systems.
++  m_passwordVisible = (m_users.size() == 1);
+ 
+   const auto rowPalette = userRowPalette();
+   m_userRowButtons.clear();
+@@ -787,16 +788,9 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
      m_backdrop->setVisible(true);
    }
  
@@ -21,7 +31,7 @@ index 404e44a..62dc5b0 100644
    }
  
    const float panelWidth =
-@@ -875,9 +868,16 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -875,9 +869,16 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
  
    float headerY = panelY + panelTopPadding + headerTopPadding;
  
@@ -38,7 +48,7 @@ index 404e44a..62dc5b0 100644
  
    // Refresh text colors each layout for theme/scheme changes.
    m_formSubtitleLabel->setColor(colorForRole(ColorRole::OnSurface));
-@@ -933,6 +933,11 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -933,6 +934,11 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
    if (m_schemeSelectLabel != nullptr) {
      m_schemeSelectLabel->setVisible(false);
    }
@@ -50,7 +60,7 @@ index 404e44a..62dc5b0 100644
  
    m_userSelectBox->setVisible(false);
    m_userSelectLabel->setVisible(false);
-@@ -976,8 +981,10 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -976,8 +982,10 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
    }
  
    m_passwordField->setVisible(m_passwordVisible);
@@ -63,7 +73,7 @@ index 404e44a..62dc5b0 100644
    if (m_passwordVisible) {
      const float backSize = Style::controlHeight();
      m_backButton->setSize(backSize, backSize);
-@@ -1024,10 +1031,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -1024,10 +1032,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
      m_backButton->setVisible(false);
    }
  
@@ -88,7 +98,7 @@ index 404e44a..62dc5b0 100644
  
    if (hasStatus) {
      const float statusY = contentTop + contentBlockHeight + statusGap;
-@@ -1047,6 +1064,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+@@ -1047,6 +1065,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
    // Place initial keyboard focus on the last-used user so a returning user can
    // type their password immediately. Done here because the user rows only have
    // valid focus targets once the scene has been laid out.
@@ -109,15 +119,3 @@ index 404e44a..62dc5b0 100644
    if (!m_initialFocusDone && !m_passwordVisible && !m_focusRing.empty()) {
      std::ptrdiff_t initial = 0;
      for (std::size_t i = 0; i < m_focusRing.size(); ++i) {
-@@ -1277,6 +1308,11 @@ void GreeterSurface::loadUsers() {
- 
-   m_selectedUser = 0;
-   setUsername(m_users[m_selectedUser]);
-+
-+  // zentoo minimal UI: skip the user-row step on single-user systems.
-+  if (m_users.size() == 1) {
-+    m_passwordVisible = true;
-+  }
- }
- 
- void GreeterSurface::loadSessions() {
