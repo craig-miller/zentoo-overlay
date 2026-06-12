@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>craig@nextidea.io</email>
+		<name>Craig Miller</name>
+	</maintainer>
+	<longdescription lang="en">
+		Login greeter matching the Noctalia Wayland shell. Ships an
+		in-process wlroots compositor (noctalia-greeter-compositor),
+		a greeter UI, a session wrapper invoked by greetd, and a
+		polkit helper that syncs wallpaper and Material You palette
+		from the live noctalia session into the greeter screen.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">noctalia-dev/noctalia-greeter</remote-id>
+	</upstream>
+</pkgmetadata>
