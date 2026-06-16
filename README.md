@@ -4,14 +4,11 @@ A Gentoo Portage overlay for packages not in the main tree or GURU, maintained a
 
 ## Packages
 
-| Package | Purpose |
-| --- | --- |
+| Package                        | Purpose                                                                                                                                      |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------|
 | `app-laptop/asahi-brightnessd` | C daemon driving display + keyboard backlight from the M1 ambient-light sensor ([source](https://github.com/craig-miller/asahi-brightnessd)) |
-| `app-portage/pycargoebuild` | Local backport of pycargoebuild ahead of the main tree |
-| `dev-lang/dart-sass-bin` | Dart Sass compiler (binhost) |
-| `gui-apps/danksearch` | App-launcher backend used by DankMaterialShell |
-| `gui-apps/soundthemed` | Userspace sound-theme daemon ([source](https://github.com/craig-miller/soundthemed)) |
-| `gui-apps/wayle` | Wayland desktop shell — bar, OSD, notifications, wallpaper, device controls ([upstream](https://github.com/wayle-rs/wayle)) |
+| `app-portage/pycargoebuild`    | Local backport of pycargoebuild ahead of the main tree                                                                                       |
+| `gui-apps/soundthemed`         | Userspace sound-theme daemon ([source](https://github.com/craig-miller/soundthemed))                                                         |
 
 ## Enabling
 
