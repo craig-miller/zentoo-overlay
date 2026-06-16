@@ -213,11 +213,11 @@ CRATES="
 	zvariant_utils@3.3.0
 "
 
-inherit cargo
+inherit cargo desktop
 
 SOUNDTHEMED_COMMIT="96603674c83376a9de79ba17642102ca8612354b"
 
-DESCRIPTION="Freedesktop sound theme daemon — plays event sounds for USB, battery, network, session, and more"
+DESCRIPTION="Freedesktop sound theme daemon for USB/battery/network/session events"
 HOMEPAGE="https://github.com/destructatron/soundthemed"
 SRC_URI="
 	https://github.com/destructatron/${PN}/archive/${SOUNDTHEMED_COMMIT}.tar.gz -> ${P}.tar.gz
@@ -227,7 +227,7 @@ S="${WORKDIR}/${PN}-${SOUNDTHEMED_COMMIT}"
 
 LICENSE="MIT"
 SLOT="0"
-KEYWORDS="~arm64 ~amd64"
+KEYWORDS="~amd64 ~arm64"
 
 RDEPEND="
 	gui-libs/gtk:4
@@ -271,8 +271,7 @@ src_install() {
 		Categories=Settings;AudioVideo;Audio;
 		Keywords=sound;theme;event;notification;
 	EOF
-	insinto /usr/share/applications
-	doins "${T}"/soundthemed-config.desktop
+	domenu "${T}"/soundthemed-config.desktop
 
 	einstalldocs
 }
