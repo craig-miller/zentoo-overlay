@@ -1,13 +1,20 @@
 Quiet U-Boot output on Asahi M1: hide the board model line, gate driver
-chatter via the silent= env variable, and drop the autoboot countdown
-window entirely. With BOOTDELAY=0 there's no key-press window for entering
-the U-Boot interactive prompt — by design — which also collapses the F4-to-
-reveal-GRUB-menu timing onto GRUB's own 2-second hidden timeout, no longer
-overlapping U-Boot's earlier window.
+chatter via the silent= env variable, drop the autoboot countdown window
+entirely, and suppress the upper-right U-Boot wordmark bitmap. With
+BOOTDELAY=0 there's no key-press window for entering the U-Boot interactive
+prompt -- by design -- which also collapses the F4-to-reveal-GRUB-menu timing
+onto GRUB's own 2-second hidden timeout, no longer overlapping U-Boot's
+earlier window.
 
 The preboot command sets silent=1 (which gates all subsequent console output
 via CONFIG_SILENT_CONSOLE) and then runs `usb start` -- the same command that
 was the upstream default for CONFIG_PREBOOT when CONFIG_USB_KEYBOARD=y.
+
+Disabling CONFIG_VIDEO_LOGO removes the stock 80x80 32bpp BMP (linked into
+the image as u_boot_logo.o and drawn by drivers/video/video-uclass.c:show_splash
+at top-right via video_bmp_display(dev, ..., -4, 4, true)). With CONFIG_NO_FB_CLEAR
+also set, the framebuffer region underneath stays as m1n1 handed it off -- so
+the boot splash continues uninterrupted until GRUB takes over.
 
 U-Boot's version banner and DRAM probe line print before preboot runs, so they
 remain visible; silencing those would require source edits (common/board_f.c).
@@ -17,7 +24,7 @@ packaging tag has its own defconfig deltas).
 
 --- a/configs/apple_m1_defconfig
 +++ b/configs/apple_m1_defconfig
-@@ -4,7 +4,9 @@ CONFIG_ARCH_APPLE=y
+@@ -4,7 +4,9 @@
  CONFIG_DEFAULT_DEVICE_TREE="t8103-j274"
  CONFIG_SYS_BOOTM_LEN=0x800000
  CONFIG_SYS_LOAD_ADDR=0x0
@@ -28,7 +35,7 @@ packaging tag has its own defconfig deltas).
  # CONFIG_AUTOBOOT_KEYED is not set
  # CONFIG_AUTOBOOT_MENU_SHOW is not set
  CONFIG_BOOTCOMMAND="bootflow scan -b"
-@@ -12,7 +14,7 @@ CONFIG_USE_PREBOOT=y
+@@ -12,7 +14,7 @@
  CONFIG_SYS_CBSIZE=256
  CONFIG_SYS_PBSIZE=276
  # CONFIG_DISPLAY_CPUINFO is not set
@@ -37,3 +44,9 @@ packaging tag has its own defconfig deltas).
  CONFIG_BOARD_LATE_INIT=y
  CONFIG_CMD_SELECT_FONT=y
  CONFIG_NO_NET=y
+@@ -30,4 +32,5 @@
+ CONFIG_SYS_WHITE_ON_BLACK=y
+ CONFIG_NO_FB_CLEAR=y
+ CONFIG_VIDEO_SIMPLE=y
++# CONFIG_VIDEO_LOGO is not set
+ # CONFIG_SMBIOS is not set
