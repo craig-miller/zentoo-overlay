@@ -1,0 +1,34 @@
+From: zentoo <noreply@zentoo>
+Subject: silence "Loading Linux ..." / "Loading initial ramdisk ..." echoes
+
+GRUB's stock /etc/grub.d/10_linux emits an `echo '...'` line into grub.cfg
+before each `linux` and `initrd` directive. That produces visible "Loading
+Linux x.y.z ..." and "Loading initial ramdisk ..." lines on the boot
+console between GRUB's handoff and the kernel taking over the framebuffer.
+
+On a quiet boot (`quiet loglevel=3` + `GRUB_TIMEOUT_STYLE=hidden` + a
+Plymouth splash), those two `echo` lines are the only remaining text noise
+between GRUB and Plymouth. Removing them gives a clean visual handoff.
+
+The fix is to drop the two `echo` lines from the heredocs in
+`util/grub.d/10_linux.in`. The kernel and initrd directives themselves
+are unaffected.
+
+--- a/util/grub.d/10_linux.in
++++ b/util/grub.d/10_linux.in
+@@ -143,7 +143,6 @@ linux_entry ()
+   fi
+   message="$(gettext_printf "Loading Linux %s ..." ${version})"
+   sed "s/^/$submenu_indentation/" << EOF
+-	echo	'$(echo "$message" | grub_quote)'
+ 	linux	${rel_dirname}/${basename} root=${linux_root_device_thisversion} ro ${args}
+ EOF
+   if test -n "${initrd}" ; then
+@@ -154,7 +153,6 @@ EOF
+       initrd_path="${initrd_path} ${rel_dirname}/${i}"
+     done
+     sed "s/^/$submenu_indentation/" << EOF
+-	echo	'$(echo "$message" | grub_quote)'
+ 	initrd	$(echo $initrd_path)
+ EOF
+   fi
