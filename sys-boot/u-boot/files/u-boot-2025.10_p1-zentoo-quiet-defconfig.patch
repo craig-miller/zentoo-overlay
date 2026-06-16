@@ -1,0 +1,39 @@
+Quiet U-Boot output on Asahi M1: hide the board model line, gate driver
+chatter via the silent= env variable, and drop the autoboot countdown
+window entirely. With BOOTDELAY=0 there's no key-press window for entering
+the U-Boot interactive prompt — by design — which also collapses the F4-to-
+reveal-GRUB-menu timing onto GRUB's own 2-second hidden timeout, no longer
+overlapping U-Boot's earlier window.
+
+The preboot command sets silent=1 (which gates all subsequent console output
+via CONFIG_SILENT_CONSOLE) and then runs `usb start` -- the same command that
+was the upstream default for CONFIG_PREBOOT when CONFIG_USB_KEYBOARD=y.
+
+U-Boot's version banner and DRAM probe line print before preboot runs, so they
+remain visible; silencing those would require source edits (common/board_f.c).
+
+Baseline: asahi-v2025.10-p1 (NOT upstream U-Boot v2025.10 -- the Asahi
+packaging tag has its own defconfig deltas).
+
+--- a/configs/apple_m1_defconfig
++++ b/configs/apple_m1_defconfig
+@@ -4,7 +4,9 @@ CONFIG_ARCH_APPLE=y
+ CONFIG_DEFAULT_DEVICE_TREE="t8103-j274"
+ CONFIG_SYS_BOOTM_LEN=0x800000
+ CONFIG_SYS_LOAD_ADDR=0x0
+-CONFIG_BOOTDELAY=1
++CONFIG_BOOTDELAY=0
++CONFIG_SILENT_CONSOLE=y
++CONFIG_PREBOOT="setenv silent 1; usb start"
+ # CONFIG_AUTOBOOT_KEYED is not set
+ # CONFIG_AUTOBOOT_MENU_SHOW is not set
+ CONFIG_BOOTCOMMAND="bootflow scan -b"
+@@ -12,7 +14,7 @@ CONFIG_USE_PREBOOT=y
+ CONFIG_SYS_CBSIZE=256
+ CONFIG_SYS_PBSIZE=276
+ # CONFIG_DISPLAY_CPUINFO is not set
+-CONFIG_DISPLAY_BOARDINFO_LATE=y
++# CONFIG_DISPLAY_BOARDINFO_LATE is not set
+ CONFIG_BOARD_LATE_INIT=y
+ CONFIG_CMD_SELECT_FONT=y
+ CONFIG_NO_NET=y
