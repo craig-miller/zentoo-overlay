@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>craig@nextidea.io</email>
+		<name>Craig Miller</name>
+	</maintainer>
+	<upstream>
+		<remote-id type="github">craig-miller/zentoo-overlay</remote-id>
+	</upstream>
+	<longdescription>
+		Plymouth boot theme built on the upstream two-step plugin.
+
+		Renders a centered rotating infinity spinner on a black background with
+		a thin white progress bar at the bottom. The LUKS unlock dialog is a
+		white pill (80% opacity) with solid white dot bullets, no lock icon,
+		no surrounding box.
+
+		Reuses the stock spinfinity throbber, keyboard layout and capslock
+		assets via symlinks; ships custom box.png, entry.png, bullet.png and
+		lock.png.
+	</longdescription>
+</pkgmetadata>
