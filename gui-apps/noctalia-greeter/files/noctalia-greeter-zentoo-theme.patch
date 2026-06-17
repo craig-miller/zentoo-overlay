@@ -1,0 +1,255 @@
+diff --git a/src/greeter/greeter_surface.cpp b/src/greeter/greeter_surface.cpp
+index d532c5f..29cd769 100644
+--- a/src/greeter/greeter_surface.cpp
++++ b/src/greeter/greeter_surface.cpp
+@@ -489,7 +489,19 @@ void GreeterSurface::initialize(RenderContext* context) {
+ void GreeterSurface::applyInitialUserSelection() {
+   const auto initialUser = greeter::resolveInitialUserName(greeter::loadGreeterPreferences());
+   if (!initialUser.has_value()) {
+-    m_passwordVisible = false;
++    // zentoo theme: on single-user systems auto-flip to the password step so
++    // the greeter behaves like a lock screen instead of a one-item user picker.
++    if (m_users.size() == 1) {
++      m_selectedUser = 0;
++      setUsername(m_users[0]);
++      m_passwordVisible = true;
++      m_password.clear();
++      if (m_passwordField != nullptr) {
++        m_passwordField->setValue("");
++      }
++    } else {
++      m_passwordVisible = false;
++    }
+     return;
+   }
+ 
+@@ -876,15 +888,9 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+     m_backdrop->setVisible(true);
+   }
+ 
++  // zentoo theme: hide the bottom Noctalia logo unconditionally.
+   if (m_bottomBrandLogo != nullptr) {
+-    const bool hasBrandLogo = m_brandLogoTexture.id != 0;
+-    m_bottomBrandLogo->setVisible(hasBrandLogo);
+-    if (hasBrandLogo) {
+-      const float logoSize = Style::scaled(64.0f);
+-      m_bottomBrandLogo->setSize(logoSize, logoSize);
+-      m_bottomBrandLogo->setPosition(ox + std::round((sw - logoSize) * 0.5f), oy + sh - logoSize - Style::spaceLg());
+-      m_bottomBrandLogo->setTint(colorForRole(ColorRole::OnSurface, 0.88f));
+-    }
++    m_bottomBrandLogo->setVisible(false);
+   }
+ 
+   const float panelWidth = std::clamp(sw * 0.32f, Style::scaled(440.0f), Style::scaled(540.0f));
+@@ -896,21 +902,22 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   const float glyphScale = std::clamp(1.0f - (userCount - 2.0f) * 0.08f, 0.75f, 1.0f);
+   const float headerGlyphSize = Style::scaled(kHeaderUserIconBase) * glyphScale;
+ 
+-  if (m_passwordVisible && !m_users.empty() && m_selectedUser < m_users.size()) {
+-    m_formSubtitleLabel->setText(m_users[m_selectedUser]);
+-    m_formSubtitleLabel->setVisible(true);
+-  } else {
+-    m_formSubtitleLabel->setVisible(false);
+-  }
++  // zentoo theme: hide the username subtitle under the password field
++  // (header avatar is hidden too, so this is the last "who am I logging in
++  // as" hint — noise on a single-user system).
++  m_formSubtitleLabel->setVisible(false);
+   if (m_formSubtitleLabel->visible()) {
+     m_formSubtitleLabel->measure(*renderer);
+   }
+   m_statusLabel->measure(*renderer);
+ 
+   const float subtitleGap = m_formSubtitleLabel->visible() ? (6.0f + m_formSubtitleLabel->height()) : 0.0f;
+-  const float headerTopPadding = Style::spaceSm();
+-  const float headerGlyphBlock = headerGlyphSize + Style::spaceMd();
+-  const float headerToContentGap = Style::spaceLg();
++  // zentoo theme: the panel header (avatar, glyph, subtitle, brand labels) is
++  // entirely hidden, so collapse every header contribution to zero. The outer
++  // panelTopPadding still provides the panel's inset.
++  const float headerTopPadding = 0.0f;
++  const float headerGlyphBlock = 0.0f;
++  const float headerToContentGap = 0.0f;
+   const float headerBlockHeight = headerTopPadding + headerGlyphBlock + subtitleGap + headerToContentGap;
+ 
+   const float sessionRowH = rowHeight;
+@@ -922,8 +929,12 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+         + rowGap * static_cast<float>(m_userRowButtons.size() - 1);
+   }
+ 
+-  const float userPickerContentHeight = userListHeight + sessionRowGap + sessionRowH;
+-  const float passwordContentHeight = Style::controlHeight() + sessionRowGap + sessionRowH;
++  // zentoo theme: drop the session/WM picker's height contribution when
++  // there's only one session installed; reappears with a second .desktop in
++  // /usr/share/wayland-sessions/.
++  const float sessionContribution = (m_sessions.size() > 1) ? (sessionRowGap + sessionRowH) : 0.0f;
++  const float userPickerContentHeight = userListHeight + sessionContribution;
++  const float passwordContentHeight = Style::controlHeight() + sessionContribution;
+   const float contentBlockHeight = m_passwordVisible ? passwordContentHeight : userPickerContentHeight;
+ 
+   const bool hasStatus = m_statusIsError && !m_status.empty();
+@@ -953,6 +964,14 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   if (m_brandPane != nullptr) {
+     static_cast<RectNode*>(m_brandPane)->setVisible(false);
+   }
++  // zentoo theme: hide the brand title + subtitle labels (upstream already
++  // hides the brand pane rectangle above).
++  if (m_brandTitleLabel != nullptr) {
++    m_brandTitleLabel->setVisible(false);
++  }
++  if (m_brandSubtitleLabel != nullptr) {
++    m_brandSubtitleLabel->setVisible(false);
++  }
+ 
+   // Refresh text colors each layout for theme/scheme changes.
+   m_formSubtitleLabel->setColor(colorForRole(ColorRole::OnSurface));
+@@ -969,6 +988,13 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   }
+ 
+   syncHeaderUserAvatar(*renderer, headerGlyphSize, panelX, panelWidth, headerY);
++  // zentoo theme: hide the header avatar / person icon.
++  if (m_headerUserGlyph != nullptr) {
++    m_headerUserGlyph->setVisible(false);
++  }
++  if (m_headerUserAvatar != nullptr) {
++    m_headerUserAvatar->setVisible(false);
++  }
+   headerY += headerGlyphBlock;
+ 
+   if (m_formSubtitleLabel->visible()) {
+@@ -982,22 +1008,43 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   if (m_panelDivider != nullptr)
+     m_panelDivider->setVisible(false);
+ 
+-  m_loginPanel->setPosition((panelX), (panelY));
+-  m_loginPanel->setSize(panelWidth, panelHeight);
++  // zentoo theme: render the panel chrome 12px wider than the field's content
++  // area (6px on each side) so the pill has horizontal breathing room inside
++  // the panel when it appears on auth error. Layout math (contentLeft,
++  // contentWidth, pill placement) still uses the unmodified panelWidth, so
++  // only the chrome around the pill grows.
++  constexpr float kPanelChromeBleed = 12.0f;
++  m_loginPanel->setPosition((panelX - kPanelChromeBleed * 0.5f), (panelY));
++  m_loginPanel->setSize(panelWidth + kPanelChromeBleed, panelHeight);
++  // zentoo theme: give the panel a softly-rounded corner (1.5x the field's
++  // pill radius — bigger than upstream's scaledRadiusXl but well short of a
++  // full pill). Fill + border at 75% opacity make the panel a translucent
++  // scrim rather than a hard block over the wallpaper.
+   m_loginPanel->setStyle(
+       RoundedRectStyle{
+-          .fill = colorForRole(ColorRole::SurfaceVariant),
+-          .border = colorForRole(ColorRole::Outline),
++          .fill = colorForRole(ColorRole::SurfaceVariant, 0.75f),
++          .border = colorForRole(ColorRole::Outline, 0.75f),
+           .fillMode = FillMode::Solid,
+-          .radius = Style::scaledRadiusXl(),
++          .radius = Style::controlHeight() * 0.75f,
+           .softness = 1.0f,
+           .borderWidth = Style::borderWidth(),
+       }
+   );
++  // zentoo theme: hide the panel background by default — the pill-shaped
++  // password field is the only chrome at idle, floating over the wallpaper.
++  // When an auth error needs to be shown, restore the panel so the error
++  // message gets its intended chrome (the bare wallpaper makes the Material
++  // You Error color hard to read on greyscale wallpapers, and the panel
++  // appearing also serves as a visual "something went wrong" affordance).
++  // Layout still uses panelX/panelY/panelWidth/panelHeight to position the
++  // password field, so we keep the setSize/setStyle calls above untouched.
++  m_loginPanel->setVisible(m_statusIsError && !m_status.empty());
+ 
+   const float buttonWidth = Style::controlHeight();
+   const float gap = Style::spaceSm();
+-  const float inputWidth = std::max(120.0f, contentWidth - buttonWidth - gap);
++  // zentoo theme: login button is hidden, so the password field spans the
++  // full content width instead of reserving buttonWidth + gap on the right.
++  const float inputWidth = contentWidth;
+ 
+   const float selectorH = Style::controlHeightSm();
+   const float schemeW = measureIconSelectorWidth(m_schemeSelectIcon, m_schemeSelectGlyph);
+@@ -1010,6 +1057,13 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   if (m_schemeSelectLabel != nullptr) {
+     m_schemeSelectLabel->setVisible(false);
+   }
++  // zentoo theme: hide the scheme/theme picker entirely. The greeter scheme
++  // is set by /var/lib/noctalia-greeter/greeter.conf (synced from the live
++  // noctalia panel via Sync Now), so the picker is redundant.
++  if (m_schemeSelectBox != nullptr)   m_schemeSelectBox->setVisible(false);
++  if (m_schemeSelectIcon != nullptr)  m_schemeSelectIcon->setVisible(false);
++  if (m_schemeSelectGlyph != nullptr) m_schemeSelectGlyph->setVisible(false);
++  if (m_schemeSelectArea != nullptr)  m_schemeSelectArea->setVisible(false);
+ 
+   layoutPowerButtons(ox, oy, sw, sh);
+ 
+@@ -1050,8 +1104,11 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+   }
+ 
+   m_passwordField->setVisible(m_passwordVisible);
+-  m_loginButton->setVisible(m_passwordVisible);
+-  m_backButton->setVisible(m_passwordVisible);
++  // zentoo theme: Enter on the password field submits, so the login button is
++  // unnecessary. Single-user has no user-row step to back out to, so the back
++  // button is unnecessary too. Multi-user keeps row navigation via arrow keys.
++  m_loginButton->setVisible(false);
++  m_backButton->setVisible(false);
+   if (m_passwordVisible) {
+     const float backSize = Style::controlHeight();
+     m_backButton->setSize(backSize, backSize);
+@@ -1087,9 +1144,20 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
+     m_backButton->setVisible(false);
+   }
+ 
+-  const float sessionY = m_passwordVisible ? (contentTop + Style::controlHeight() + sessionRowGap)
+-                                           : (contentTop + userListHeight + sessionRowGap);
+-  layoutPanelSessionSelector(contentLeft, sessionY, contentWidth, sessionRowH);
++  // zentoo theme: only render the session/WM picker when there's a real
++  // choice. Add a second .desktop under /usr/share/wayland-sessions/ and the
++  // picker reappears automatically.
++  if (m_sessions.size() > 1) {
++    const float sessionY = m_passwordVisible ? (contentTop + Style::controlHeight() + sessionRowGap)
++                                             : (contentTop + userListHeight + sessionRowGap);
++    layoutPanelSessionSelector(contentLeft, sessionY, contentWidth, sessionRowH);
++  } else {
++    if (m_sessionSelectBox != nullptr)   m_sessionSelectBox->setVisible(false);
++    if (m_sessionSelectLabel != nullptr) m_sessionSelectLabel->setVisible(false);
++    if (m_sessionSelectIcon != nullptr)  m_sessionSelectIcon->setVisible(false);
++    if (m_sessionSelectGlyph != nullptr) m_sessionSelectGlyph->setVisible(false);
++    if (m_sessionSelectArea != nullptr)  m_sessionSelectArea->setVisible(false);
++  }
+ 
+   if (hasStatus) {
+     const float statusY = contentTop + contentBlockHeight + statusGap;
+diff --git a/src/ui/controls/input.cpp b/src/ui/controls/input.cpp
+index 8700063..1d78a9d 100644
+--- a/src/ui/controls/input.cpp
++++ b/src/ui/controls/input.cpp
+@@ -387,19 +387,22 @@ void Input::applyVisualState() {
+   }
+ 
+   const bool focused = m_inputArea != nullptr && m_inputArea->focused();
+-  const bool hovered = m_inputArea != nullptr && m_inputArea->hovered();
+-  const Color fill = focused ? colorForRole(ColorRole::Surface) : colorForRole(ColorRole::SurfaceVariant);
+-  const Color border = m_invalid ? colorForRole(ColorRole::Error)
+-      : focused                  ? colorForRole(ColorRole::Primary)
+-      : hovered                  ? colorForRole(ColorRole::Hover)
+-                                 : colorForRole(ColorRole::Outline);
++  // zentoo theme: render the input's fill at 85% opacity so the field sits
++  // lightly over the wallpaper. The border tracks the fill color so the
++  // outline disappears — the pill renders as a single tone. Drops the
++  // state-dependent hover/invalid border colors.
++  const Color fill = focused ? colorForRole(ColorRole::Surface, 0.85f) : colorForRole(ColorRole::SurfaceVariant, 0.85f);
++  const Color border = fill;
+ 
+   m_background->setStyle(
+       RoundedRectStyle{
+           .fill = fill,
+           .border = border,
+           .fillMode = FillMode::Solid,
+-          .radius = Style::scaledRadiusMd(),
++          // zentoo theme: pill-shape the input — radius half the control
++          // height. The greeter's only Input instance is the password field;
++          // any future Input added upstream will also render as a pill.
++          .radius = m_controlHeight * 0.5f,
+           .softness = 1.0f,
+           .borderWidth = Style::borderWidth(),
+       }
