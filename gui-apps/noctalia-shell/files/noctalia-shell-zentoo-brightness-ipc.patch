@@ -1,19 +1,28 @@
 diff --git a/src/app/application.cpp b/src/app/application.cpp
-index 53199e1..6e9bed7 100644
+index f44e7e0bf..0ee24179d 100644
 --- a/src/app/application.cpp
 +++ b/src/app/application.cpp
-@@ -49,6 +49,7 @@
+@@ -49,6 +49,10 @@
  #include "util/file_utils.h"
  
  #include <algorithm>
++// zentoo fix: brightness-suppress IPC handler uses std::from_chars for
++// integer parsing of the duration argument (see brightness-suppress
++// registerHandler below).
 +#include <charconv>
  #include <chrono>
  #include <cmath>
  #include <csignal>
-@@ -1962,6 +1963,26 @@ void Application::initIpc() {
+@@ -2027,6 +2031,32 @@ void Application::initIpc() {
        },
        "brightness-osd <value>", "Show brightness OSD without changing brightness"
    );
++  // zentoo fix: brightness-suppress <ms> — let an external caller (e.g.,
++  // asahi-brightnessd, which mirrors ambient-light readings into hardware
++  // brightness on its own cadence) silence the OSD for a bounded window
++  // around its own brightness writes. Without this, every ALS update
++  // pops the brightness OSD into view even though the user never asked
++  // for a brightness change.
 +  m_ipcService.registerHandler(
 +      "brightness-suppress",
 +      [this](const std::string& args) -> std::string {

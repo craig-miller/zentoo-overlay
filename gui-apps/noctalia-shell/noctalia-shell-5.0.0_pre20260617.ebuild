@@ -3,17 +3,18 @@
 
 EAPI=8
 
-inherit meson optfeature git-r3
+inherit meson optfeature
+
+MY_COMMIT="23d69b565f49670ee5b6568149b810822560f8fa"
 
 DESCRIPTION="A lightweight Wayland shell and bar built directly on Wayland + OpenGL ES"
 HOMEPAGE="https://noctalia.dev/ https://github.com/noctalia-dev/noctalia"
 
-EGIT_REPO_URI="https://github.com/noctalia-dev/noctalia.git"
+SRC_URI="https://github.com/noctalia-dev/noctalia/archive/${MY_COMMIT}.tar.gz -> ${P}.tar.gz"
+S="${WORKDIR}/noctalia-${MY_COMMIT}"
 
 LICENSE="MIT"
 SLOT="0"
-KEYWORDS=""
-PROPERTIES="live"
 
 IUSE="+jemalloc"
 
@@ -49,7 +50,7 @@ BDEPEND="
 DOCS=( README.md CREDITS.md example.toml )
 
 PATCHES=(
-	"${FILESDIR}"/noctalia-shell-brightness-suppress-ipc.patch
+	"${FILESDIR}"/noctalia-shell-zentoo-brightness-ipc.patch
 )
 
 src_configure() {
