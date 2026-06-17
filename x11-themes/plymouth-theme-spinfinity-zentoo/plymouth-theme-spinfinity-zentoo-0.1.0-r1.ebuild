@@ -18,7 +18,7 @@ src_install() {
 
 	insinto "${theme_dir}"
 	doins "${FILESDIR}"/spinfinity-zentoo.plymouth
-	doins "${FILESDIR}"/{box,bullet,entry,lock}.png
+	doins "${FILESDIR}"/{background-tile,box,bullet,entry,lock}.png
 
 	local f
 	for f in animation-0001 capslock keyboard keymap-render; do
