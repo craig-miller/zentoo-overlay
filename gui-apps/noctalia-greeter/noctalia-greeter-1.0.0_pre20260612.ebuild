@@ -46,6 +46,10 @@ BDEPEND="
 
 DOCS=( README.md CHANGELOG.md )
 
+PATCHES=(
+	"${FILESDIR}"/noctalia-greeter-minimal-ui.patch
+)
+
 pkg_postinst() {
 	elog ""
 	elog "noctalia-greeter is installed but the system still uses your"
