@@ -220,25 +220,27 @@ index d532c5f..29cd769 100644
    if (hasStatus) {
      const float statusY = contentTop + contentBlockHeight + statusGap;
 diff --git a/src/ui/controls/input.cpp b/src/ui/controls/input.cpp
-index 8700063..1d78a9d 100644
+index 8700063..43fd0d0 100644
 --- a/src/ui/controls/input.cpp
 +++ b/src/ui/controls/input.cpp
-@@ -387,19 +387,22 @@ void Input::applyVisualState() {
+@@ -386,20 +386,23 @@ void Input::applyVisualState() {
+     return;
    }
  
-   const bool focused = m_inputArea != nullptr && m_inputArea->focused();
+-  const bool focused = m_inputArea != nullptr && m_inputArea->focused();
 -  const bool hovered = m_inputArea != nullptr && m_inputArea->hovered();
 -  const Color fill = focused ? colorForRole(ColorRole::Surface) : colorForRole(ColorRole::SurfaceVariant);
 -  const Color border = m_invalid ? colorForRole(ColorRole::Error)
 -      : focused                  ? colorForRole(ColorRole::Primary)
 -      : hovered                  ? colorForRole(ColorRole::Hover)
 -                                 : colorForRole(ColorRole::Outline);
-+  // zentoo theme: render the input's fill at 85% opacity so the field sits
-+  // lightly over the wallpaper. The border tracks the fill color so the
-+  // outline disappears — the pill renders as a single tone. Drops the
-+  // state-dependent hover/invalid border colors.
-+  const Color fill = focused ? colorForRole(ColorRole::Surface, 0.85f) : colorForRole(ColorRole::SurfaceVariant, 0.85f);
-+  const Color border = fill;
++  // zentoo theme: match the upstream power buttons' idle palette — Surface
++  // fill, Outline border, both at full opacity, regardless of focus state.
++  // The power buttons render in the screen corner alongside the password
++  // field, and this keeps the two visually consistent. Drops the
++  // upstream focused/hovered/invalid state-dependent border colors.
++  const Color fill = colorForRole(ColorRole::Surface);
++  const Color border = colorForRole(ColorRole::Outline);
  
    m_background->setStyle(
        RoundedRectStyle{
