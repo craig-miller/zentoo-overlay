@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
 <pkgmetadata>
-	<maintainer type="person">
-		<email>craig@nextidea.io</email>
-		<name>Craig Miller</name>
-	</maintainer>
 	<longdescription>
 		Ambient-light-driven auto-brightness daemon for Apple Silicon
 		MacBooks running Asahi Linux. Reads lux from the AOP ambient
