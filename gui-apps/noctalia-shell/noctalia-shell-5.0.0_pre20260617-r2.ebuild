@@ -40,6 +40,7 @@ DEPEND="
 "
 
 RDEPEND="${DEPEND}
+	sys-apps/accountsservice
 	sys-power/upower
 "
 
