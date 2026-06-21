@@ -39,7 +39,9 @@ DEPEND="
 	jemalloc? ( dev-libs/jemalloc:= )
 "
 
-RDEPEND="${DEPEND}"
+RDEPEND="${DEPEND}
+	sys-power/upower
+"
 
 BDEPEND="
 	dev-libs/wayland
