@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		Custom XDG desktop launcher entries for zentoo. Each .desktop
+		file in files/ installs to /usr/share/applications/ and is
+		picked up by noctalia's launcher and any other XDG-compliant
+		application menu. Use this package for one-off launchers that
+		don't belong to an upstream package — webcam preview, scratchpad
+		terminals, conference-app shortcuts, etc.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">craig-miller/zentoo-overlay</remote-id>
+	</upstream>
+</pkgmetadata>
