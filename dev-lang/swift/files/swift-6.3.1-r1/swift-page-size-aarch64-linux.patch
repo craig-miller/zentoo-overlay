@@ -1,0 +1,51 @@
+From: Craig Miller <craig@nextidea.io>
+Date: 2026-06-22
+Subject: [PATCH] Runtime: use 16KB SWIFT_PAGE_SIZE on aarch64 Linux
+
+The Swift runtime's backtrace machinery allocates static buffers
+aligned to SWIFT_PAGE_SIZE and protects them with mprotect(). On a
+kernel built with CONFIG_ARM64_16K_PAGES=y (Asahi-Linux on Apple
+Silicon, Raspberry Pi OS 64-bit, RHEL 9 arm64), the kernel requires
+mprotect() addresses to be 16KB-aligned, but SWIFT_PAGE_SIZE evaluates
+to 4096 on Linux because the guard requires __APPLE__. mprotect()
+returns EINVAL at startup and every swift / swiftc / SwiftPM
+invocation emits:
+
+    swift runtime: unable to protect path to swift-backtrace at 0x...;
+    disabling backtracing.
+    swift runtime: unable to protect environment for swift-backtrace
+    at 0x...; disabling backtracing.
+
+Over-aligning the static buffers to 16KB on a 4KB-page kernel is safe
+(mprotect accepts any multiple of the runtime page size); under-
+aligning to 4KB on a 16KB-page kernel is what produces the EINVAL.
+
+Forum thread (Houghton, Swift runtime maintainer, identifying the
+same root cause for Raspberry Pi OS):
+https://forums.swift.org/t/steps-to-resolve-unable-to-protect-swift-backtrace-disabling-backtracing/72076
+
+---
+ swift/include/swift/Runtime/Config.h | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+--- a/swift/include/swift/Runtime/Config.h
++++ b/swift/include/swift/Runtime/Config.h
+@@ -585,10 +585,17 @@
+ #endif
+
+ /// What is the system page size?
+-#if defined(__APPLE__) && defined(__arm64__)
++#if (defined(__APPLE__) && defined(__arm64__)) || \
++    (defined(__linux__) && defined(__aarch64__))
+   // Apple Silicon systems use a 16KB page size
++  //
++  // Also: aarch64 Linux on 16KB-page kernels (Asahi-Linux on Apple
++  // Silicon, Raspberry Pi OS 64-bit, RHEL 9 arm64). Backtrace.cpp's
++  // mprotect() requires the static buffers' alignment to match the
++  // runtime page size. Over-aligning to 16KB is safe on a 4KB-page
++  // kernel; under-aligning to 4KB EINVALs on a 16KB-page kernel.
+   #define SWIFT_PAGE_SIZE 16384
+ #else
+   // Everything else uses 4KB pages
+   #define SWIFT_PAGE_SIZE 4096
+ #endif
