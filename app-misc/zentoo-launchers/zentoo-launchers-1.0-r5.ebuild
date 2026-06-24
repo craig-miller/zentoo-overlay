@@ -20,6 +20,7 @@ KEYWORDS="~arm64"
 # removing them surfaces via portage.
 RDEPEND="
 	media-video/mpv
+	app-admin/pass-otp
 "
 
 src_install() {
