@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		Pass Secret Service is a Rust implementation of the freedesktop
+		org.freedesktop.secrets D-Bus API backed by pass(1). Secrets
+		written by libsecret-using applications (gvfs, NetworkManager,
+		git credential helpers, browsers) land as GPG-encrypted entries
+		under ~/.password-store/secret-service/.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">grimsteel/pass-secret-service</remote-id>
+	</upstream>
+</pkgmetadata>
