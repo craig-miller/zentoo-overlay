@@ -21,6 +21,7 @@ KEYWORDS="~arm64"
 RDEPEND="
 	media-video/mpv
 	app-admin/pass-otp
+	app-admin/pass
 	net-dns/avahi
 	net-fs/samba
 	gui-apps/wl-clipboard

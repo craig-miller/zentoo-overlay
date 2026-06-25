@@ -7,6 +7,50 @@ set -u
 
 TYPES='_smb._tcp|_afpovertcp._tcp|_sftp-ssh._tcp|_webdav._tcp|_webdavs._tcp'
 
+# List Disk-type shares on an SMB host given user%pass creds (or %% for anonymous).
+list_smb_shares() {
+    local host=$1 creds=$2
+    smbclient -L "$host" -U "$creds" -t 5 2>/dev/null \
+        | awk '$2 == "Disk" && $1 !~ /\$$/ {print $1}'
+}
+
+# Get-or-prompt SMB credentials at pass path `smb/<host>`.
+# First line of the entry = password; a `login: <user>` line carries the username.
+# Echoes the share list on success, returns nonzero on failure.
+auth_and_list_shares() {
+    local host=$1 shares body user password
+
+    # 1. Try anonymous.
+    shares=$(list_smb_shares "$host" "%") || true
+    if [[ -n "$shares" ]]; then printf '%s\n' "$shares"; return 0; fi
+
+    # 2. Try saved creds.
+    if pass show "smb/$host" >/dev/null 2>&1; then
+        body=$(pass show "smb/$host")
+        password=$(printf '%s\n' "$body" | head -1)
+        user=$(printf '%s\n' "$body" | awk -F': *' '/^(login|user|username): / {print $2; exit}')
+        if [[ -n "$user" && -n "$password" ]]; then
+            shares=$(list_smb_shares "$host" "$user%$password") || true
+            if [[ -n "$shares" ]]; then printf '%s\n' "$shares"; return 0; fi
+        fi
+    fi
+
+    # 3. Prompt + save.
+    printf 'Auth needed for %s\n' "$host" >&2
+    read -r -p "Username: " user < /dev/tty
+    read -r -s -p "Password: " password < /dev/tty
+    echo >&2
+    [[ -z "$user" || -z "$password" ]] && return 1
+    shares=$(list_smb_shares "$host" "$user%$password") || true
+    if [[ -n "$shares" ]]; then
+        printf '%s\nlogin: %s\n' "$password" "$user" \
+            | pass insert -m -f "smb/$host" >/dev/null
+        printf '%s\n' "$shares"
+        return 0
+    fi
+    return 1
+}
+
 services=$(avahi-browse -art --parsable --no-db-lookup 2>/dev/null \
     | awk -F';' -v types="$TYPES" '
         function unescape(s,    out, i, c) {
@@ -45,13 +89,13 @@ host=$(printf '%s' "$picked" | cut -f3)
 
 case "$proto" in
     smb)
-        shares=$(smbclient -NL "$host" -t 5 2>/dev/null \
-            | awk '$2 == "Disk" && $1 !~ /\$$/ {print $1}') || shares=""
-        if [[ -n "$shares" ]]; then
+        if shares=$(auth_and_list_shares "$host") && [[ -n "$shares" ]]; then
             share=$(printf '%s\n' "$shares" \
                 | fzf --prompt="Share on $host: " --height=40% --reverse) || exit 0
             uri="smb://$host/$share"
         else
+            notify-send -a "Network Browser" "Network Browser" \
+                "Auth/listing failed for $host — falling back to host root"
             uri="smb://$host/"
         fi
         ;;
