@@ -1,0 +1,69 @@
+#!/bin/bash
+# network-browser — discover LAN file shares via Avahi, copy a mount URI to
+# the Wayland clipboard. Paste into yazi's `g a` (gvfs.yazi add-mount) to mount.
+# Shipped by app-misc/zentoo-launchers.
+
+set -u
+
+TYPES='_smb._tcp|_afpovertcp._tcp|_sftp-ssh._tcp|_webdav._tcp|_webdavs._tcp'
+
+services=$(avahi-browse -art --parsable --no-db-lookup 2>/dev/null \
+    | awk -F';' -v types="$TYPES" '
+        function unescape(s,    out, i, c) {
+            out = ""; i = 1
+            while (i <= length(s)) {
+                c = substr(s, i, 1)
+                if (c == "\\" && i + 3 <= length(s) && substr(s, i+1, 3) ~ /^[0-9]{3}$/) {
+                    out = out sprintf("%c", substr(s, i+1, 3) + 0)
+                    i += 4
+                } else {
+                    out = out c; i += 1
+                }
+            }
+            return out
+        }
+        $1 == "=" && $5 ~ types {
+            proto = $5
+            sub(/^_/, "", proto); sub(/\._tcp$/, "", proto)
+            name = unescape($4)
+            host = unescape($7)
+            printf "%-32s  %-12s  %s\t%s\t%s\n", name, proto, host, proto, host
+        }' \
+    | sort -u) || services=""
+
+if [[ -z "$services" ]]; then
+    notify-send -a "Network Browser" "Network Browser" "No LAN file shares advertised"
+    exit 0
+fi
+
+picked=$(printf '%s\n' "$services" \
+    | fzf --delimiter=$'\t' --with-nth=1 \
+          --prompt='LAN service: ' --height=40% --reverse) || exit 0
+
+proto=$(printf '%s' "$picked" | cut -f2)
+host=$(printf '%s' "$picked" | cut -f3)
+
+case "$proto" in
+    smb)
+        shares=$(smbclient -NL "$host" -t 5 2>/dev/null \
+            | awk '$2 == "Disk" && $1 !~ /\$$/ {print $1}') || shares=""
+        if [[ -n "$shares" ]]; then
+            share=$(printf '%s\n' "$shares" \
+                | fzf --prompt="Share on $host: " --height=40% --reverse) || exit 0
+            uri="smb://$host/$share"
+        else
+            uri="smb://$host/"
+        fi
+        ;;
+    afpovertcp) uri="afp://$host/" ;;
+    sftp-ssh)   uri="sftp://$host/" ;;
+    webdav)     uri="dav://$host/" ;;
+    webdavs)    uri="davs://$host/" ;;
+    *)
+        notify-send -a "Network Browser" "Network Browser" "Unknown protocol: $proto"
+        exit 1
+        ;;
+esac
+
+printf %s "$uri" | wl-copy
+notify-send -a "Network Browser" "Network Browser" "Copied: $uri"

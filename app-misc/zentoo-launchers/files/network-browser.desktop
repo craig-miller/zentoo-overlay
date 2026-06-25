@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Browse Network
+Comment=Discover LAN file shares and copy mount URI to clipboard
+Exec=foot --app-id=network-browser network-browser
+Icon=network-workgroup
+Terminal=false
+Categories=Network;FileTransfer;
