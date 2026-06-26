@@ -1,18 +1,18 @@
 #!/bin/bash
-# network-browser — discover LAN file shares via Avahi, pick a share, copy
-# its URI to the Wayland clipboard. Shipped by app-misc/zentoo-launchers.
+# network-browser — discover LAN file shares via Avahi, mount one via gvfs.
+# Shipped by app-misc/zentoo-launchers.
 #
-# Flow: avahi service picker → host pick → for SMB, gio-mount the host root
-# (which tty-prompts for creds the first time and persists them via
-# libsecret → pass-secret-service → pass) so we can `gio list` its shares →
-# share picker → clipboard. Final mount of the picked share is yazi's job:
-# paste the URI in `g a`. The launcher only discovers and translates.
+# Flow: avahi service picker → host pick → (SMB) gio-mount the host root to
+# auth + enumerate, fzf share picker, gio-mount the picked share. (AFP /
+# SFTP / WebDAV) bare-host URI, gio-mount it. Either way, the picked URI
+# lands on the clipboard as a convenience. Each gio mount call prompts on
+# the tty for credentials the first time and persists them via libsecret →
+# pass-secret-service → pass.
 #
-# Note: gvfs and gvfs.yazi store creds under different libsecret schemas,
-# so the host-root mount this script does does NOT make yazi's share mount
-# silent — yazi will prompt once on its own, then be silent for subsequent
-# mounts of the same share. This launcher's prompt + yazi's prompt are
-# independent. (Phase 2 of the gvfs-yazi-discover plan consolidates them.)
+# Note: gvfs's COMPAT_NETWORK schema and gvfs.yazi's custom schema don't
+# cross-look-up. Creds saved here don't make a subsequent yazi `g a` mount
+# of the same share silent (yazi will prompt once on its own). The Phase 2
+# gvfs.yazi `discover` subcommand will fold both paths into one schema.
 
 set -u
 
@@ -44,16 +44,21 @@ url_encode() {
     done
 }
 
-# Idempotent gio mount: skip if `gio mount -l` already shows the URI,
-# otherwise mount synchronously with full tty access (so prompts surface).
-ensure_mounted() {
+# True if any gvfs mount exists under "<scheme>://<host>". Matches both
+# bare-host mounts (-> smb://host/) and share mounts (-> smb://host/share).
+# Used to detect existing auth on the host so we can skip a redundant
+# bare-host mount when yazi (or anyone) already mounted a share.
+host_has_mount() {
+    local scheme=$1 host=$2
+    gio mount -l 2>/dev/null | grep -qiE "-> ${scheme}://${host}(/|\$)"
+}
+
+# True if this exact URI is mounted. End-anchored to a `/` or EOL so
+# smb://host/craig doesn't match a query for smb://host/.
+uri_is_mounted() {
     local uri=$1
     local needle="${uri%/}"
-    if gio mount -l 2>/dev/null | grep -qE "(-> $needle$|-> $needle/$)"; then
-        return 0
-    fi
-    printf '\n\033[36m  Authenticating to\033[0m %s\n' "$uri"
-    gio mount "$uri"
+    gio mount -l 2>/dev/null | grep -qiE "(-> ${needle}\$|-> ${needle}/\$)"
 }
 
 (
@@ -99,10 +104,17 @@ host=$(printf '%s' "$picked" | cut -f3)
 
 case "$proto" in
     smb)
-        if ! ensure_mounted "smb://$host/"; then
-            notify-send -a "Network Browser" "Network Browser" \
-                "Could not authenticate to smb://$host/"
-            exit 1
+        # Authenticate to host so we can enumerate shares. If a mount under
+        # the host already exists (yazi mounted a share earlier, etc.), we
+        # already have the connection — skip the bare-host gio mount.
+        if ! host_has_mount smb "$host"; then
+            printf '\n\033[36m  Authenticating to\033[0m smb://%s/\n' "$host"
+            gio mount "smb://$host/" || true
+            if ! host_has_mount smb "$host"; then
+                notify-send -a "Network Browser" "Network Browser" \
+                    "Could not authenticate to smb://$host/"
+                exit 1
+            fi
         fi
         shares=$(gio list "smb://$host/" 2>/dev/null | awk '{print $1}') || shares=""
         if [[ -n "$shares" ]]; then
@@ -123,5 +135,15 @@ case "$proto" in
         ;;
 esac
 
+# Mount the picked URI. Idempotent: if it's already mounted, do nothing.
+if ! uri_is_mounted "$uri"; then
+    printf '\n\033[36m  Mounting\033[0m %s\n' "$uri"
+    gio mount "$uri" || true
+    if ! uri_is_mounted "$uri"; then
+        notify-send -a "Network Browser" "Network Browser" "Mount failed for $uri"
+        exit 1
+    fi
+fi
+
 printf %s "$uri" | wl-copy
-notify-send -a "Network Browser" "Network Browser" "Copied: $uri — paste in yazi (g a) to mount"
+notify-send -a "Network Browser" "Network Browser" "Mounted: $uri"
