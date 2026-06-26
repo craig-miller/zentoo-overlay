@@ -2,19 +2,26 @@
 # network-browser — discover LAN file shares via Avahi, mount one via gvfs.
 # Shipped by app-misc/zentoo-launchers.
 #
-# Flow: avahi service picker → host pick → (SMB) gio-mount the host root to
-# auth + enumerate, fzf share picker, gio-mount the picked share. (AFP /
-# SFTP / WebDAV) bare-host URI, gio-mount it. Either way, the picked URI
-# lands on the clipboard as a convenience. Each gio mount call prompts on
-# the tty for credentials the first time and persists them via libsecret →
-# pass-secret-service → pass.
+# Flow: avahi service picker → host pick → (SMB) `gio list smb://host/` to
+# enumerate shares (smb-browse prompts on tty if it needs auth), fzf share
+# picker, `gio mount smb://host/share` to mount. (AFP / SFTP / WebDAV) bare-
+# host URI, `gio mount` it. URI also lands on clipboard as a convenience.
 #
-# Note: gvfs's COMPAT_NETWORK schema and gvfs.yazi's custom schema don't
-# cross-look-up. Creds saved here don't make a subsequent yazi `g a` mount
-# of the same share silent (yazi will prompt once on its own). The Phase 2
-# gvfs.yazi `discover` subcommand will fold both paths into one schema.
+# Cred storage: gio mount persists creds via libsecret → pass-secret-service
+# → pass. gvfs's COMPAT_NETWORK schema and gvfs.yazi's custom schema don't
+# cross-look-up, so creds saved here don't make a later yazi `g a` of the
+# same share silent. Phase 2 of the gvfs-yazi-discover plan folds both into
+# one schema.
 
 set -u
+
+# Defensive env: a foot terminal opened ad hoc sometimes loses
+# DBUS_SESSION_BUS_ADDRESS, which makes notify-send try to autolaunch via
+# X11. Point it at the canonical user-session socket if available.
+: "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && -S "$XDG_RUNTIME_DIR/bus" ]]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+fi
 
 TYPES='_smb._tcp|_afpovertcp._tcp|_sftp-ssh._tcp|_webdav._tcp|_webdavs._tcp'
 
@@ -44,21 +51,13 @@ url_encode() {
     done
 }
 
-# True if any gvfs mount exists under "<scheme>://<host>". Matches both
-# bare-host mounts (-> smb://host/) and share mounts (-> smb://host/share).
-# Used to detect existing auth on the host so we can skip a redundant
-# bare-host mount when yazi (or anyone) already mounted a share.
-host_has_mount() {
-    local scheme=$1 host=$2
-    gio mount -l 2>/dev/null | grep -qiE "-> ${scheme}://${host}(/|\$)"
-}
-
-# True if this exact URI is mounted. End-anchored to a `/` or EOL so
-# smb://host/craig doesn't match a query for smb://host/.
+# True if this exact URI is mounted. End-anchored so smb://host/share
+# doesn't match a check for smb://host/. `--` keeps grep from parsing the
+# leading `->` as a flag.
 uri_is_mounted() {
     local uri=$1
     local needle="${uri%/}"
-    gio mount -l 2>/dev/null | grep -qiE "(-> ${needle}\$|-> ${needle}/\$)"
+    gio mount -l 2>/dev/null | grep -qiE -- "(-> ${needle}$|-> ${needle}/$)"
 }
 
 (
@@ -104,25 +103,20 @@ host=$(printf '%s' "$picked" | cut -f3)
 
 case "$proto" in
     smb)
-        # Authenticate to host so we can enumerate shares. If a mount under
-        # the host already exists (yazi mounted a share earlier, etc.), we
-        # already have the connection — skip the bare-host gio mount.
-        if ! host_has_mount smb "$host"; then
-            printf '\n\033[36m  Authenticating to\033[0m smb://%s/\n' "$host"
-            gio mount "smb://$host/" || true
-            if ! host_has_mount smb "$host"; then
-                notify-send -a "Network Browser" "Network Browser" \
-                    "Could not authenticate to smb://$host/"
-                exit 1
-            fi
-        fi
-        shares=$(gio list "smb://$host/" 2>/dev/null | awk '{print $1}') || shares=""
-        if [[ -n "$shares" ]]; then
+        # Enumerate shares via gvfsd-smb-browse. It prompts on the tty if
+        # the server demands auth (macOS Tahoe blocks anon). Drop admin
+        # shares ($-suffixed: IPC$, ADMIN$, c$) and any error lines.
+        printf '\n\033[36m  Listing shares on\033[0m smb://%s/\n' "$host"
+        shares=$(gio list "smb://$host/" 2>&1 \
+                 | grep -vE -- '\$$|^$|^gio:|^Error|^Operation' || true)
+        if [[ -z "$shares" ]]; then
+            read -r -p "Share on $host (enumeration empty; type a share name): " share < /dev/tty || share=""
+            [[ -z "$share" ]] && exit 0
+            uri="smb://$host/$(url_encode "$share")"
+        else
             share=$(printf '%s\n' "$shares" \
                 | fzf --prompt="Share on $host: " --height=40% --reverse) || exit 0
             uri="smb://$host/$(url_encode "$share")"
-        else
-            uri="smb://$host/"
         fi
         ;;
     afpovertcp) uri="afp://$host/" ;;
