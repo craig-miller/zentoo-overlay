@@ -1,79 +1,70 @@
 #!/bin/bash
 # network-browser — discover LAN file shares via Avahi, copy a mount URI to
-# the Wayland clipboard. Paste into yazi's `g a` (gvfs.yazi add-mount) to mount.
-# Shipped by app-misc/zentoo-launchers.
+# the Wayland clipboard. Shipped by app-misc/zentoo-launchers.
+#
+# Hand-off model: this launcher does discovery + clipboard ONLY. Paste the
+# copied URI in yazi (g a) to mount; yazi + gvfs.yazi own auth (via the
+# keyring vault → pass-secret-service → pass) and the persistent mount.
+# See install-guide Ch.25 for the substrate rationale.
 
 set -u
 
 TYPES='_smb._tcp|_afpovertcp._tcp|_sftp-ssh._tcp|_webdav._tcp|_webdavs._tcp'
 
-# List Disk-type shares on an SMB host given user%pass creds (or %% for anonymous).
-list_smb_shares() {
-    local host=$1 creds=$2
-    smbclient -L "$host" -U "$creds" -t 5 2>/dev/null \
-        | awk '$2 == "Disk" && $1 !~ /\$$/ {print $1}'
+tmpfile=$(mktemp); trap 'rm -f "$tmpfile"; printf "\033[?25h"' EXIT
+
+spin_until() {
+    local pid=$1 label=$2
+    local chars=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+    local n=${#chars[@]} i=0
+    printf '\033[?25l'
+    while kill -0 "$pid" 2>/dev/null; do
+        printf '\r\033[36m%s\033[0m %s ' "${chars[i % n]}" "$label"
+        i=$((i + 1))
+        sleep 0.08
+    done
+    printf '\r\033[K\033[?25h'
 }
 
-# Get-or-prompt SMB credentials at pass path `smb/<host>`.
-# First line of the entry = password; a `login: <user>` line carries the username.
-# Echoes the share list on success, returns nonzero on failure.
-auth_and_list_shares() {
-    local host=$1 shares body user password
-
-    # 1. Try anonymous.
-    shares=$(list_smb_shares "$host" "%") || true
-    if [[ -n "$shares" ]]; then printf '%s\n' "$shares"; return 0; fi
-
-    # 2. Try saved creds.
-    if pass show "smb/$host" >/dev/null 2>&1; then
-        body=$(pass show "smb/$host")
-        password=$(printf '%s\n' "$body" | head -1)
-        user=$(printf '%s\n' "$body" | awk -F': *' '/^(login|user|username): / {print $2; exit}')
-        if [[ -n "$user" && -n "$password" ]]; then
-            shares=$(list_smb_shares "$host" "$user%$password") || true
-            if [[ -n "$shares" ]]; then printf '%s\n' "$shares"; return 0; fi
-        fi
-    fi
-
-    # 3. Prompt + save.
-    printf 'Auth needed for %s\n' "$host" >&2
-    read -r -p "Username: " user < /dev/tty
-    read -r -s -p "Password: " password < /dev/tty
-    echo >&2
-    [[ -z "$user" || -z "$password" ]] && return 1
-    shares=$(list_smb_shares "$host" "$user%$password") || true
-    if [[ -n "$shares" ]]; then
-        printf '%s\nlogin: %s\n' "$password" "$user" \
-            | pass insert -m -f "smb/$host" >/dev/null
-        printf '%s\n' "$shares"
-        return 0
-    fi
-    return 1
+url_encode() {
+    local s=$1 i c
+    for ((i=0; i<${#s}; i++)); do
+        c="${s:i:1}"
+        case "$c" in
+            [a-zA-Z0-9._~-]) printf '%s' "$c" ;;
+            *) printf '%%%02X' "'$c" ;;
+        esac
+    done
 }
 
-services=$(avahi-browse -art --parsable --no-db-lookup 2>/dev/null \
-    | awk -F';' -v types="$TYPES" '
-        function unescape(s,    out, i, c) {
-            out = ""; i = 1
-            while (i <= length(s)) {
-                c = substr(s, i, 1)
-                if (c == "\\" && i + 3 <= length(s) && substr(s, i+1, 3) ~ /^[0-9]{3}$/) {
-                    out = out sprintf("%c", substr(s, i+1, 3) + 0)
-                    i += 4
-                } else {
-                    out = out c; i += 1
+(
+    avahi-browse -art --parsable --no-db-lookup 2>/dev/null \
+        | awk -F';' -v types="$TYPES" '
+            function unescape(s,    out, i, c) {
+                out = ""; i = 1
+                while (i <= length(s)) {
+                    c = substr(s, i, 1)
+                    if (c == "\\" && i + 3 <= length(s) && substr(s, i+1, 3) ~ /^[0-9]{3}$/) {
+                        out = out sprintf("%c", substr(s, i+1, 3) + 0)
+                        i += 4
+                    } else {
+                        out = out c; i += 1
+                    }
                 }
+                return out
             }
-            return out
-        }
-        $1 == "=" && $5 ~ types {
-            proto = $5
-            sub(/^_/, "", proto); sub(/\._tcp$/, "", proto)
-            name = unescape($4)
-            host = unescape($7)
-            printf "%-32s  %-12s  %s\t%s\t%s\n", name, proto, host, proto, host
-        }' \
-    | sort -u) || services=""
+            $1 == "=" && $5 ~ types {
+                proto = $5
+                sub(/^_/, "", proto); sub(/\._tcp$/, "", proto)
+                name = unescape($4)
+                host = unescape($7)
+                printf "%-32s  %-12s  %s\t%s\t%s\n", name, proto, host, proto, host
+            }' \
+        | sort -u > "$tmpfile"
+) &
+spin_until $! "Scanning LAN"
+wait
+services=$(<"$tmpfile")
 
 if [[ -z "$services" ]]; then
     notify-send -a "Network Browser" "Network Browser" "No LAN file shares advertised"
@@ -89,13 +80,10 @@ host=$(printf '%s' "$picked" | cut -f3)
 
 case "$proto" in
     smb)
-        if shares=$(auth_and_list_shares "$host") && [[ -n "$shares" ]]; then
-            share=$(printf '%s\n' "$shares" \
-                | fzf --prompt="Share on $host: " --height=40% --reverse) || exit 0
-            uri="smb://$host/$share"
+        read -r -p "Share on $host (Enter for host root): " share < /dev/tty || share=""
+        if [[ -n "$share" ]]; then
+            uri="smb://$host/$(url_encode "$share")"
         else
-            notify-send -a "Network Browser" "Network Browser" \
-                "Auth/listing failed for $host — falling back to host root"
             uri="smb://$host/"
         fi
         ;;
@@ -110,4 +98,4 @@ case "$proto" in
 esac
 
 printf %s "$uri" | wl-copy
-notify-send -a "Network Browser" "Network Browser" "Copied: $uri"
+notify-send -a "Network Browser" "Network Browser" "Copied: $uri — paste in yazi (g a) to mount"
