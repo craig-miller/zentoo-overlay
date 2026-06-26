@@ -1,11 +1,18 @@
 #!/bin/bash
-# network-browser — discover LAN file shares via Avahi, copy a mount URI to
-# the Wayland clipboard. Shipped by app-misc/zentoo-launchers.
+# network-browser — discover LAN file shares via Avahi, pick a share, copy
+# its URI to the Wayland clipboard. Shipped by app-misc/zentoo-launchers.
 #
-# Hand-off model: this launcher does discovery + clipboard ONLY. Paste the
-# copied URI in yazi (g a) to mount; yazi + gvfs.yazi own auth (via the
-# keyring vault → pass-secret-service → pass) and the persistent mount.
-# See install-guide Ch.25 for the substrate rationale.
+# Flow: avahi service picker → host pick → for SMB, gio-mount the host root
+# (which tty-prompts for creds the first time and persists them via
+# libsecret → pass-secret-service → pass) so we can `gio list` its shares →
+# share picker → clipboard. Final mount of the picked share is yazi's job:
+# paste the URI in `g a`. The launcher only discovers and translates.
+#
+# Note: gvfs and gvfs.yazi store creds under different libsecret schemas,
+# so the host-root mount this script does does NOT make yazi's share mount
+# silent — yazi will prompt once on its own, then be silent for subsequent
+# mounts of the same share. This launcher's prompt + yazi's prompt are
+# independent. (Phase 2 of the gvfs-yazi-discover plan consolidates them.)
 
 set -u
 
@@ -35,6 +42,18 @@ url_encode() {
             *) printf '%%%02X' "'$c" ;;
         esac
     done
+}
+
+# Idempotent gio mount: skip if `gio mount -l` already shows the URI,
+# otherwise mount synchronously with full tty access (so prompts surface).
+ensure_mounted() {
+    local uri=$1
+    local needle="${uri%/}"
+    if gio mount -l 2>/dev/null | grep -qE "(-> $needle$|-> $needle/$)"; then
+        return 0
+    fi
+    printf '\n\033[36m  Authenticating to\033[0m %s\n' "$uri"
+    gio mount "$uri"
 }
 
 (
@@ -80,8 +99,15 @@ host=$(printf '%s' "$picked" | cut -f3)
 
 case "$proto" in
     smb)
-        read -r -p "Share on $host (Enter for host root): " share < /dev/tty || share=""
-        if [[ -n "$share" ]]; then
+        if ! ensure_mounted "smb://$host/"; then
+            notify-send -a "Network Browser" "Network Browser" \
+                "Could not authenticate to smb://$host/"
+            exit 1
+        fi
+        shares=$(gio list "smb://$host/" 2>/dev/null | awk '{print $1}') || shares=""
+        if [[ -n "$shares" ]]; then
+            share=$(printf '%s\n' "$shares" \
+                | fzf --prompt="Share on $host: " --height=40% --reverse) || exit 0
             uri="smb://$host/$(url_encode "$share")"
         else
             uri="smb://$host/"

@@ -24,6 +24,7 @@ RDEPEND="
 	net-dns/avahi
 	net-fs/samba
 	gui-apps/wl-clipboard
+	gnome-base/gvfs
 "
 
 src_install() {
