@@ -1,0 +1,23 @@
+diff --git a/src/pipewire/pipewire_service.cpp b/src/pipewire/pipewire_service.cpp
+--- a/src/pipewire/pipewire_service.cpp
++++ b/src/pipewire/pipewire_service.cpp
+@@ -582,9 +582,18 @@
+     return std::ranges::contains(kMicrophoneSourceClasses, nd.mediaClass);
+   }
+
++  // zentoo fix: also exclude nodes whose graph hop is passive (node.passive=true).
++  // WirePlumber filter-chain inputs — e.g. the J316 mic chain that wraps the M1's
++  // 3-channel RawMics source into a polished mono effect_output — keep a permanent
++  // link to the raw source but capture nothing on their own. Without this exclusion,
++  // the privacy widget reports the microphone as in-use for the whole session even
++  // when no app is recording. stream.capture.sink would also engage the existing
++  // opt-out path but misrepresents these nodes as sink monitors and confuses other
++  // PipeWire tools (pavucontrol, OBS, wpctl); node.passive is the accurate signal.
+   [[nodiscard]] bool isAudioCaptureConsumer(const PipeWireService::NodeData& nd) {
+-    return std::ranges::contains(kAudioCaptureConsumerClasses, nd.mediaClass) && !nd.streamCaptureSink;
++    return std::ranges::contains(kAudioCaptureConsumerClasses, nd.mediaClass)
++        && !nd.streamCaptureSink && !nd.nodePassive;
+   }
+
+   [[nodiscard]] bool isCameraSource(const PipeWireService::NodeData& nd) {
+     return std::ranges::contains(kCameraSourceClasses, nd.mediaClass);

@@ -54,6 +54,7 @@ DOCS=( README.md CREDITS.md example.toml )
 
 PATCHES=(
 	"${FILESDIR}"/noctalia-shell-zentoo-brightness-ipc.patch
+	"${FILESDIR}"/noctalia-shell-zentoo-privacy-passive.patch
 )
 
 src_configure() {
