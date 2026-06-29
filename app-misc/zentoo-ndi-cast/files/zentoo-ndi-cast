@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""
+zentoo-ndi-cast — broadcast the local desktop as NDI on the LAN.
+
+Opens an xdg-desktop-portal ScreenCast session (the system popup lets you
+pick a monitor or window), then spawns gst-launch-1.0 to wrap the PipeWire
+stream as an NDI source. Any NDI receiver on the LAN (Ecamm Live, OBS,
+NDI Tools) picks it up by name.
+
+Requires zentoo-overlay's gui-wm/niri ebuild (carries PR #1791 — SHM
+fallback for niri's PipeWire screencast stream). The `! video/x-raw !`
+capsfilter below forces PipeWire onto the SHM (modifier-less) format —
+without it pipewiresrc prefers DMA-BUF and on Apple GPU ends up with the
+tiled-compressed modifier that gst can't decode.
+
+Ctrl+C / SIGTERM ends the stream and closes the portal session cleanly.
+"""
+import argparse
+import ctypes
+import os
+import sys
+import signal
+import secrets
+import subprocess
+
+import dbus
+from dbus.mainloop.glib import DBusGMainLoop
+from gi.repository import GLib
+
+DBusGMainLoop(set_as_default=True)
+
+PORTAL_BUS = 'org.freedesktop.portal.Desktop'
+PORTAL_PATH = '/org/freedesktop/portal/desktop'
+SC_IFACE = 'org.freedesktop.portal.ScreenCast'
+REQ_IFACE = 'org.freedesktop.portal.Request'
+SESSION_IFACE = 'org.freedesktop.portal.Session'
+
+SOURCE_TYPE_MASK = {
+    'monitor': 1,
+    'window': 2,
+    'both': 1 | 2,
+}
+
+# Linux prctl(PR_SET_PDEATHSIG): when the parent dies (any way — clean exit,
+# SIGKILL, OOM kill, session logout), the kernel sends this signal to us.
+# Use it on gst-launch so it never outlives the helper, no matter what.
+_PR_SET_PDEATHSIG = 1
+
+
+def _arrange_pdeathsig():
+    try:
+        libc = ctypes.CDLL('libc.so.6', use_errno=True)
+        libc.prctl(_PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0)
+    except Exception:
+        pass
+
+XDG_STATE_HOME = os.environ.get('XDG_STATE_HOME') or os.path.expanduser('~/.local/state')
+LOG_PATH = os.path.join(XDG_STATE_HOME, 'zentoo-ndi-cast.log')
+RESTORE_TOKEN_PATH = os.path.join(XDG_STATE_HOME, 'zentoo-ndi-cast.restore_token')
+PID_PATH = os.path.join(XDG_STATE_HOME, 'zentoo-ndi-cast.pid')
+
+
+def log(msg):
+    print(f'zentoo-ndi-cast: {msg}', flush=True)
+
+
+def parse_args():
+    p = argparse.ArgumentParser(
+        prog='zentoo-ndi-cast',
+        description='Broadcast the local desktop as NDI on the LAN.',
+    )
+    p.add_argument('--ndi-name', default=None,
+                   help='NDI source name advertised on the LAN (default: derived from '
+                        'portal selection — "Display" for a monitor, "Window" for a window)')
+    p.add_argument('--source-type', choices=list(SOURCE_TYPE_MASK.keys()), default='both',
+                   help='What the portal popup may pick (default: both)')
+    p.add_argument('--restore-portal', action='store_true',
+                   help='Persist + reuse the portal session token across runs')
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+    os.makedirs(XDG_STATE_HOME, exist_ok=True)
+    with open(PID_PATH, 'w') as f:
+        f.write(str(os.getpid()))
+
+    bus = dbus.SessionBus()
+    portal = bus.get_object(PORTAL_BUS, PORTAL_PATH)
+    sc = dbus.Interface(portal, SC_IFACE)
+
+    sender = bus.get_unique_name()[1:].replace('.', '_')
+    loop = GLib.MainLoop()
+    state = {'session': None, 'node': None, 'fd': None, 'gst': None, 'ndi_name': None}
+
+    def request_path(token):
+        return f'/org/freedesktop/portal/desktop/request/{sender}/{token}'
+
+    def listen_once(path, callback):
+        def wrapper(response, results):
+            bus.remove_signal_receiver(
+                wrapper, signal_name='Response',
+                dbus_interface=REQ_IFACE, path=path,
+            )
+            callback(response, results)
+        bus.add_signal_receiver(
+            wrapper, signal_name='Response',
+            dbus_interface=REQ_IFACE, path=path,
+        )
+
+    def subscribe_both(expected_path, actual_path, callback):
+        listen_once(expected_path, callback)
+        if actual_path and actual_path != expected_path:
+            listen_once(actual_path, callback)
+
+    def on_create(response, results):
+        if response != 0:
+            sys.stderr.write(f'CreateSession failed: {response}\n')
+            loop.quit(); return
+        state['session'] = str(results['session_handle'])
+        log(f'session: {state["session"]}')
+        token = secrets.token_hex(4)
+        expected = request_path(token)
+        actual = str(sc.SelectSources(state['session'], {
+            'handle_token': token,
+            'types': dbus.UInt32(SOURCE_TYPE_MASK[args.source_type]),
+            'multiple': False,
+            'cursor_mode': dbus.UInt32(2),
+        }))
+        subscribe_both(expected, actual, on_select)
+
+    def on_select(response, results):
+        if response != 0:
+            sys.stderr.write(f'SelectSources failed: {response}\n')
+            loop.quit(); return
+        token = secrets.token_hex(4)
+        expected = request_path(token)
+        start_opts = {'handle_token': token}
+        if args.restore_portal:
+            start_opts['persist_mode'] = dbus.UInt32(2)
+            if os.path.exists(RESTORE_TOKEN_PATH):
+                with open(RESTORE_TOKEN_PATH) as f:
+                    start_opts['restore_token'] = f.read().strip()
+        actual = str(sc.Start(state['session'], '', start_opts))
+        subscribe_both(expected, actual, on_start)
+
+    def on_start(response, results):
+        if response != 0:
+            sys.stderr.write(f'Start cancelled or failed: {response}\n')
+            loop.quit(); return
+        if args.restore_portal and 'restore_token' in results:
+            with open(RESTORE_TOKEN_PATH, 'w') as f:
+                f.write(str(results['restore_token']))
+        streams = results.get('streams')
+        if not streams:
+            sys.stderr.write('No streams returned\n')
+            loop.quit(); return
+        node_id, stream_props = streams[0]
+        state['node'] = int(node_id)
+        if args.ndi_name:
+            state['ndi_name'] = args.ndi_name
+        else:
+            source_type = int(stream_props.get('source_type', 1))
+            state['ndi_name'] = 'Window' if source_type == 2 else 'Display'
+        fd_obj = sc.OpenPipeWireRemote(state['session'], dbus.Dictionary({}, signature='sv'))
+        state['fd'] = fd_obj.take()
+        spawn_gst()
+
+    def spawn_gst():
+        pipeline = (
+            f'pipewiresrc fd={state["fd"]} path={state["node"]} do-timestamp=true '
+            # `! video/x-raw !` (no DMABuf feature) forces SHM negotiation with niri's
+            # screencast stream — see niri PR #1791 backport in the zentoo overlay ebuild.
+            f'! video/x-raw '
+            # PipeWire reports pixel-aspect-ratio=1/INT_MAX (gst's "unknown" sentinel),
+            # which makes videoscale treat the source as having effectively-zero DAR and
+            # fall back to stretching instead of letterboxing. capssetter merges SAR=1/1
+            # into the caps so videoscale's add-borders logic has a real aspect to preserve.
+            f'! capssetter caps=video/x-raw,pixel-aspect-ratio=1/1 join=true '
+            # Scale to 1080p with letterbox bars so receivers (Ecamm Live, etc.) see the
+            # full desktop. Ecamm has no per-source fit/fill setting, so the only way to
+            # avoid edge crops on a non-16:9 source is to letterbox at the sender.
+            f'! videoscale add-borders=true '
+            f'! video/x-raw,width=1920,height=1080,pixel-aspect-ratio=1/1 '
+            f'! videoconvert '
+            f'! video/x-raw,format=UYVY '
+            f'! ndisinkcombiner name=combiner '
+            f'! ndisink ndi-name={state["ndi_name"]} '
+            f'audiotestsrc is-live=true volume=0.0 ! combiner.audio'
+        )
+        cmd = ['gst-launch-1.0', '-v'] + pipeline.split()
+        env = {
+            **os.environ,
+            'NDI_RUNTIME_DIR_V6': '/opt/ndi/lib',
+            'GST_DEBUG': 'pipewiresrc:4,ndisink:5,*:2',
+        }
+        log_fp = open(LOG_PATH, 'w', buffering=1)
+        log_fp.write(f'=== gst-launch cmd ===\n{" ".join(cmd)}\n=== output ===\n')
+        log_fp.flush()
+        state['gst'] = subprocess.Popen(
+            cmd, env=env, pass_fds=(state['fd'],),
+            stdout=log_fp, stderr=subprocess.STDOUT,
+            preexec_fn=_arrange_pdeathsig,
+        )
+        log(f'broadcasting as NDI source: {state["ndi_name"]}')
+        log(f'gst-launch pid: {state["gst"].pid}')
+        log(f'log: {LOG_PATH}')
+        log('Ctrl+C / SIGTERM to stop.')
+
+    def cleanup(*_):
+        # Remove the pidfile FIRST so any external probe sees "not running"
+        # immediately. The actual gst-launch + portal teardown can take a
+        # few seconds; the order avoids racing a polling supervisor.
+        try:
+            os.remove(PID_PATH)
+        except OSError:
+            pass
+        if state['gst']:
+            try:
+                state['gst'].terminate()
+                state['gst'].wait(timeout=3)
+            except Exception:
+                state['gst'].kill()
+        if state['session']:
+            try:
+                sess = bus.get_object(PORTAL_BUS, state['session'])
+                dbus.Interface(sess, SESSION_IFACE).Close()
+            except Exception:
+                pass
+        loop.quit()
+
+    signal.signal(signal.SIGINT, cleanup)
+    signal.signal(signal.SIGTERM, cleanup)
+
+    token = secrets.token_hex(4)
+    listen_once(request_path(token), on_create)
+    sc.CreateSession({
+        'handle_token': token,
+        'session_handle_token': 'zentoo_cast_' + secrets.token_hex(4),
+    })
+    log('waiting for portal popup...')
+    loop.run()
+
+
+if __name__ == '__main__':
+    main()

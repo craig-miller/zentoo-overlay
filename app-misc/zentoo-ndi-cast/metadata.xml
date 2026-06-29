@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		Command-line helper that broadcasts the local desktop as an NDI
+		source on the LAN. Opens an xdg-desktop-portal ScreenCast session
+		(the system popup picks a monitor or window), wraps the resulting
+		PipeWire stream with gst-launch-1.0, and publishes it via ndisink
+		under a name like "Display" or "Window". Receivers on the LAN
+		(Ecamm Live, OBS, NDI Tools) pick it up automatically.
+
+		Designed for the zentoo Wayland substrate on Apple Silicon Asahi
+		Linux. The pipeline forces SHM negotiation (sidestepping
+		Apple-tiled DMA-BUF) and letterboxes to 1080p so receivers
+		without per-source fit/fill see the full desktop. The companion
+		noctalia plugin provides a bar tile that toggles streaming.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">craig-miller/zentoo-overlay</remote-id>
+	</upstream>
+</pkgmetadata>
