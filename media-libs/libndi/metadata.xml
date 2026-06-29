@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		NewTek (Vizrt) NDI SDK runtime — libndi.so for sending and
+		receiving NDI video over IP. Proprietary; the installer
+		must be downloaded manually from ndi.video after accepting
+		the SDK License Agreement, then placed in DISTDIR.
+
+		Consumed at runtime via dlopen by clients such as
+		media-plugins/gst-plugin-ndi. The ebuild wires
+		NDI_RUNTIME_DIR_V6=/opt/ndi/lib into /etc/env.d/99ndi
+		so dlopen consumers find the library without per-shell
+		setup.
+	</longdescription>
+</pkgmetadata>
