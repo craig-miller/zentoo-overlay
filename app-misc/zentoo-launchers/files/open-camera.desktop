@@ -2,7 +2,7 @@
 Type=Application
 Name=Open Camera
 Comment=Live preview from the FaceTime HD camera
-Exec=mpv av://v4l2:/dev/video0 --wayland-app-id=mpv-webcam --demuxer-lavf-o-add=video_size=1920x1080 --profile=low-latency --vf=hflip --force-window=yes --no-cache
+Exec=pw-v4l2 mpv av://v4l2:/dev/video0 --wayland-app-id=mpv-webcam --demuxer-lavf-o-add=video_size=1920x1080 --profile=low-latency --vf=hflip --force-window=yes --no-cache
 Icon=camera-web
 Terminal=false
 Categories=AudioVideo;Video;
