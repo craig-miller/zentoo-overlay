@@ -1,0 +1,27 @@
+NDI® Software Development Kit License Agreement
+================================================
+
+This license token (NDI-SDK) gates installation of media-libs/libndi,
+the proprietary NewTek/Vizrt NDI SDK runtime. The full license text
+ships inside the SDK tarball downloaded from ndi.video.
+
+After accepting the agreement, add to /etc/portage/make.conf:
+
+    ACCEPT_LICENSE="${ACCEPT_LICENSE} NDI-SDK"
+
+or as a per-package override in /etc/portage/package.license:
+
+    media-libs/libndi NDI-SDK
+
+The verbatim agreement is installed by the libndi ebuild to:
+
+    /usr/share/doc/libndi-<version>/licenses/NDI-SDK-License.txt
+
+Key terms (read the verbatim agreement; the summary below is informational):
+
+  - Royalty-free use of the SDK to build NDI-enabled applications.
+  - Redistribution of libndi.so requires NDI-branded use.
+  - No reverse engineering except as permitted by applicable law.
+  - "NDI" is a registered trademark of Vizrt NDI AB.
+
+NDI is a registered trademark of Vizrt NDI AB.
