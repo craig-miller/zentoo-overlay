@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		GStreamer plugin from gst-plugins-rs (net/ndi) — provides
+		ndisrc, ndisink, ndisinkcombiner, and ndisrcdemux elements
+		plus a device provider for discovering NDI sources via mDNS.
+
+		Loads libndi.so at runtime via dlopen; media-libs/libndi
+		wires NDI_RUNTIME_DIR_V6 system-wide so the plugin finds
+		the runtime without per-shell setup.
+	</longdescription>
+	<upstream>
+		<remote-id type="freedesktop-gitlab">gstreamer/gst-plugins-rs</remote-id>
+	</upstream>
+</pkgmetadata>
