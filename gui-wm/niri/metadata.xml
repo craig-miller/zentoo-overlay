@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		zentoo's downstream fork of gui-wm/niri, pinned to upstream PR #1791
+		(SHM screencast fallback) for Apple-tiled-compressed DMA-BUF compat.
+		Drop in favor of GURU's stock niri once PR #1791 merges upstream.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">niri-wm/niri</remote-id>
+		<bugs-to>https://github.com/YaLTeR/niri/pull/1791</bugs-to>
+	</upstream>
+</pkgmetadata>
