@@ -7,6 +7,7 @@ A Gentoo Portage overlay for packages not in the main tree or GURU, maintained a
 | Package                                       | Purpose                                                                                                                                      |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `app-laptop/asahi-brightnessd`                | C daemon driving display + keyboard backlight from the M1 ambient-light sensor ([source](https://github.com/craig-miller/asahi-brightnessd)) |
+| `app-misc/zentoo-ndi-cast`                    | Helper that broadcasts the desktop as an NDI source on the LAN, paired with the [`zentoo/ndi_sender`](https://github.com/craig-miller/zentoo-noctalia-plugins) Noctalia plugin |
 | `app-portage/pycargoebuild`                   | Local backport of pycargoebuild ahead of the main tree                                                                                       |
 | `gui-apps/noctalia-greeter`                   | Noctalia-matching login UI for greetd ([source](https://github.com/noctalia-dev/noctalia-greeter))                                           |
 | `gui-apps/noctalia-shell`                     | Material You Wayland shell ([source](https://github.com/noctalia-dev/noctalia-shell))                                                        |
