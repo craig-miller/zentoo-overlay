@@ -21,6 +21,13 @@ IUSE="savedconfig"
 #   - gst-plugins-libav: H.264/AAC/VP9/AV1 codecs via ffmpeg/libav
 #   - gst-plugins-opus: native Opus decoder (rank=primary), YouTube audio
 #
+#   HTTPS transport (required by HLS/DASH chunk fetch AND by any WebKit
+#   <video src="https://..."> element — the majority of the web):
+#   - gst-plugins-soup: souphttpsrc URI handler. Without it the pipeline
+#     fails to preroll ("No URI handler implemented for https") and the
+#     page's load event blocks — the whole tab hangs. Fixed 2026-07-01
+#     after diagnosing an nextidea.io <video> stall.
+#
 #   Adaptive streaming (required for YouTube full videos, NOT shorts):
 #   - gst-plugins-adaptivedemux2: framework
 #   - gst-plugins-dash: DASH demuxer — YouTube full videos crash without it
@@ -42,6 +49,7 @@ DEPEND="
 	media-libs/gst-plugins-good
 	media-plugins/gst-plugins-libav
 	media-plugins/gst-plugins-opus
+	media-plugins/gst-plugins-soup
 	media-plugins/gst-plugins-pulse
 	media-plugins/gst-plugins-adaptivedemux2
 	media-plugins/gst-plugins-dash
