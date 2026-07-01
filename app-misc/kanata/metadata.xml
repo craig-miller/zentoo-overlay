@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		Cross-platform, display-server-agnostic keyboard remapper
+		written in Rust. Adds layers, home-row mods, tap-hold, chording,
+		and macros to any keyboard the kernel sees. On zentoo it runs
+		as an OpenRC supervise-daemon under the kanata:kanata system
+		user, starting before greetd so remaps are active at the login
+		greeter.
+	</longdescription>
+	<use>
+		<flag name="cmd">Enable potentially dangerous "cmd" action to be able run arbitrary commands.</flag>
+	</use>
+	<upstream>
+		<remote-id type="github">jtroo/kanata</remote-id>
+	</upstream>
+</pkgmetadata>

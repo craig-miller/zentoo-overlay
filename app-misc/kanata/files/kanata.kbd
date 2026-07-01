@@ -1,0 +1,78 @@
+;; Pass any unmapped keys through (incl. the f-row, which the kernel's
+;; hid-apple fnmode=1/3 already maps to media keys on tap and raw F1-F12
+;; when fn is held — kanata stays out of the f-row entirely).
+(defcfg
+  process-unmapped-keys yes
+
+  ;; Allow scripts to be run from the config
+  danger-enable-cmd yes
+
+  ;; Exclude the ZSA Voyager (has its own firmware remapping)
+  linux-dev-names-exclude (
+    "Voyager"
+  )
+)
+
+(defvar
+  tap-time 200
+  hold-time 200
+  chord-time 60
+)
+
+;; The Apple M1 / M2 internal keyboard layout, minus the f-row (kernel
+;; handles that) and the fn key (consumed by hid-apple before evdev).
+(defsrc
+  grv  1    2    3    4    5    6    7    8    9    0     -     =   bspc
+  tab  q    w    e    r    t    y    u    i    o    p     [     ]   \
+  caps a    s    d    f    g    h    j    k    l    ;     '     ret
+  lsft z    x    c    v    b    n    m    ,    .    /     up    rsft
+       lctl lalt lmet           spc            rmet ralt left down right
+)
+
+;; HOME ROW MODS — tap fires the letter, hold fires the modifier.
+(defalias a-mod (tap-hold $tap-time $hold-time a lshift))
+(defalias s-mod (tap-hold $tap-time $hold-time s lctrl))
+(defalias d-mod (tap-hold $tap-time $hold-time d lalt))
+(defalias f-mod (tap-hold $tap-time $hold-time f lmet))
+
+(defalias j-mod (tap-hold $tap-time $hold-time j rmet))
+(defalias k-mod (tap-hold $tap-time $hold-time k ralt))
+(defalias l-mod (tap-hold $tap-time $hold-time l rctrl))
+(defalias ;-mod (tap-hold $tap-time $hold-time ; rshift))
+
+;; Caps Lock as hyperkey: tap fires caps, hold fires lshift+lctrl+lalt+lmet.
+;; Wired into base layer at the caps position below.
+(defalias hyperkey (tap-hold-press $tap-time $hold-time caps (multi lsft lctl lalt lmet)))
+
+;; c held activates arrow-layer; m held activates code-layer.
+(defalias c-mod (tap-hold-press $tap-time $hold-time c (layer-toggle arrow-layer)))
+(defalias m-mod (tap-hold-press $tap-time $hold-time m (layer-toggle code-layer)))
+
+;; Spacebar becomes a hyperkey when held, space when tapped.
+(defalias spc-mod (tap-hold-press $tap-time $hold-time spc (multi lsft lctl lalt lmet)))
+
+(deflayer base
+  grv  1    2    3    4    5    6    7    8    9    0     -     =   bspc
+  tab  q    w    e    r    t    y    u    i    o    p     [     ]   \
+  @hyperkey @a-mod @s-mod @d-mod @f-mod g    h    @j-mod @k-mod @l-mod @;-mod ' ret
+  lsft z    x    @c-mod v    b    n    @m-mod ,  .    /     up    rsft
+       lctl lalt lmet           @spc-mod      rmet ralt left down right
+)
+
+;; CODE LAYER — symbols on the home row, activated by holding m.
+(deflayer code-layer
+  grv    1      2     3     4    5    6    7    8    9    0    -     =    bspc
+  tab    q      -     =     +    S--  y    u    i    o    p    [     ]    \
+  caps   S-[    S-9   S-0   S-]  S--  h    j    k    l    ;    '     ret
+  lsft   [      S-\   ]     v    b    n    m    ,    .    /    up    rsft
+         lctl   lalt  lmet            spc            rmet ralt left down right
+)
+
+;; ARROW LAYER — vi-style arrows on hjkl, activated by holding c.
+(deflayer arrow-layer
+  grv  1    2    3    4    5    6    7    8    9    0     -     =   bspc
+  tab  q    w    e    r    t    y    u    i    o    p     [     ]   \
+  caps a    s    d    f    g    left down up   right ;    '     ret
+  lsft z    x    c    v    b    n    m    ,    .    /     up    rsft
+       lctl lalt lmet           @spc-mod      rmet ralt left down right
+)
