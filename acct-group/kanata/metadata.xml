@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		System group for the kanata keyboard remapper daemon
+		(app-misc/kanata). Owns /var/run pidfile paths and paired with
+		acct-user/kanata as the daemon's runtime identity.
+	</longdescription>
+</pkgmetadata>
