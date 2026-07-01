@@ -50,6 +50,12 @@ PATCHES=(
 	"${FILESDIR}"/noctalia-greeter-zentoo-theme.patch
 )
 
+src_install() {
+	meson_src_install
+	insinto /etc/logrotate.d
+	newins "${FILESDIR}"/logrotate ${PN}
+}
+
 pkg_postinst() {
 	elog ""
 	elog "noctalia-greeter is installed but the system still uses your"

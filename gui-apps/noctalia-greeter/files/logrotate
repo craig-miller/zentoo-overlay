@@ -1,0 +1,10 @@
+/var/log/noctalia-greeter.log
+{
+	weekly
+	rotate 4
+	compress
+	delaycompress
+	missingok
+	notifempty
+	copytruncate
+}
