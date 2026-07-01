@@ -5,7 +5,7 @@ EAPI=8
 
 inherit toolchain-funcs
 
-COMMIT="4a6a629f5fc8fbe4d5bdfcd9d6e54897fc3c0e00"
+COMMIT="456ac7b74ee1a28b758cab443027d103cd1fd667"
 
 DESCRIPTION="Ambient-light auto-brightness for display + keyboard backlight (Asahi Linux)"
 HOMEPAGE="https://github.com/craig-miller/asahi-brightnessd"
@@ -30,6 +30,8 @@ src_compile() {
 src_install() {
 	emake DESTDIR="${D}" install
 	newinitd "${S}/${PN}.openrc" "${PN}"
+	insinto /etc/logrotate.d
+	newins "${FILESDIR}"/logrotate ${PN}
 	einstalldocs
 }
 
