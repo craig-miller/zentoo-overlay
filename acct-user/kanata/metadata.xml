@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		System user for the kanata keyboard remapper daemon. Runs as
+		kanata:kanata with supplementary membership in the input group
+		so kanata can read /dev/input/event* devices and write to
+		/dev/uinput.
+	</longdescription>
+</pkgmetadata>
