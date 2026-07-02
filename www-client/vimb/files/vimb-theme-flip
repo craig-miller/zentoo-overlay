@@ -1,0 +1,28 @@
+#!/bin/sh
+# Called by noctalia's [hooks].theme_mode_changed.  Noctalia passes the
+# mode via the NOCTALIA_THEME_MODE env var (source: hooks/hook_manager.cpp
+# — argv is not populated at the pin commit, despite what the docs say).
+# Also accepts $1 for manual CLI testing.  Translates dark|light to vimb's
+# on|off, updates ~/.config/vimb/config, and signals every live vimb
+# process to reload via SIGUSR2 (SIGUSR1 is claimed by WebKit's JSC for
+# GC signaling — do not use it).
+# Idempotent: safe to run repeatedly with the same mode.
+
+set -eu
+
+case "${1:-${NOCTALIA_THEME_MODE:-}}" in
+    dark)  mode=on  ;;
+    light) mode=off ;;
+    *)     echo "vimb-theme-flip: expected 'dark' or 'light', got '${1:-${NOCTALIA_THEME_MODE:-}}'" >&2; exit 2 ;;
+esac
+
+config="$HOME/.config/vimb/config"
+mkdir -p "$(dirname "$config")"
+
+if [ -f "$config" ] && grep -q '^set dark-mode=' "$config"; then
+    sed -i "s/^set dark-mode=.*/set dark-mode=$mode/" "$config"
+else
+    echo "set dark-mode=$mode" >> "$config"
+fi
+
+pkill -USR2 -x vimb 2>/dev/null || true

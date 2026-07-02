@@ -82,5 +82,12 @@ src_compile() {
 src_install() {
 	emake PREFIX="/usr" DESTDIR="${D}" install
 	einstalldocs
+
+	# Helper for noctalia's [hooks].theme_mode_changed: takes dark|light
+	# on argv OR via $NOCTALIA_THEME_MODE env, rewrites the vimb config's
+	# `set dark-mode=` line, and pkill -USR2 -x vimb to reload the live
+	# session.  Wired up in ~/.config/noctalia/hooks.toml.
+	dobin "${FILESDIR}/vimb-theme-flip"
+
 	save_config src/config.def.h
 }
