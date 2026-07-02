@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		WebKit-native ad + tracker + cookie-banner blocking for vimb
+		and other WebKitGTK 6.0 applications on zentoo. Ships a small
+		C compile binary (vimb-blocklist-compile) that populates a
+		WebKitUserContentFilterStore from WKContentRuleList JSON, plus
+		a weekly cron script that fetches EasyList, EasyPrivacy, and
+		EasyList Cookie List, converts them to JSON via adblock-rust-cli,
+		compiles them, and atomically swaps the store into place at
+		/var/cache/vimb-blocklist/store/. Vimb reads from the shared
+		store at startup.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">craig-miller/vimb-blocklist</remote-id>
+	</upstream>
+</pkgmetadata>
