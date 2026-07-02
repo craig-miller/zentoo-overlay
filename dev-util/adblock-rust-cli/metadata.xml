@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		Thin command-line wrapper around brave/adblock-rust that
+		converts EasyList/ABP-format filter lists into Apple's
+		WKContentRuleList JSON format — the format consumed by
+		WebKit's WebKitUserContentFilterStore API. Written to feed
+		the WebKit-native content-filter pipeline used by zentoo's
+		vimb ad-blocking layer, but general-purpose: any WebKit-based
+		application that consumes WKContentRuleList JSON can use its
+		output.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">craig-miller/adblock-rust-cli</remote-id>
+	</upstream>
+</pkgmetadata>
