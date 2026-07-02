@@ -7,7 +7,11 @@ inherit savedconfig flag-o-matic git-r3
 
 DESCRIPTION="A fast, lightweight, vim-like browser based on webkit (GTK4)"
 HOMEPAGE="https://fanglingsu.github.io/vimb/"
-EGIT_REPO_URI="https://github.com/fanglingsu/vimb.git"
+# zentoo fork: WebKit content filters + opinionated defaults, rebased
+# onto fanglingsu/vimb master periodically. See the fork's zentoo branch
+# git log for the delta.
+EGIT_REPO_URI="https://github.com/craig-miller/vimb.git"
+EGIT_BRANCH="zentoo"
 
 LICENSE="GPL-3"
 SLOT="0"
@@ -62,21 +66,15 @@ RDEPEND="
 	app-misc/vimb-blocklist
 "
 
-PATCHES=(
-	# WebKit-native ad + tracker + cookie-banner blocking. Adds
-	# VIMB_CONTENT_FILTER_STORE_PATH to config.def.h and content-filter
-	# loading + WebView attachment to main.c. Store is populated by
-	# app-misc/vimb-blocklist (weekly cron).
-	"${FILESDIR}/vimb-content-filter.patch"
-)
-
 src_prepare() {
 	default
 	restore_config config.def.h
 }
 
 src_compile() {
-	# GTK4 has no XEmbed; keep the flag set unconditionally.
+	# GTK4 has no XEmbed; keep the flag set unconditionally. Upstream
+	# concern (not zentoo policy), so it stays in the ebuild rather
+	# than in the fork's source.
 	append-cflags -DFEATURE_NO_XEMBED=1
 	emake PREFIX="/usr"
 }
