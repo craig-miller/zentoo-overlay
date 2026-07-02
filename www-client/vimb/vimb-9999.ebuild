@@ -57,7 +57,18 @@ DEPEND="
 	media-video/pipewire[gstreamer]
 "
 BDEPEND="virtual/pkgconfig"
-RDEPEND="${DEPEND}"
+RDEPEND="
+	${DEPEND}
+	app-misc/vimb-blocklist
+"
+
+PATCHES=(
+	# WebKit-native ad + tracker + cookie-banner blocking. Adds
+	# VIMB_CONTENT_FILTER_STORE_PATH to config.def.h and content-filter
+	# loading + WebView attachment to main.c. Store is populated by
+	# app-misc/vimb-blocklist (weekly cron).
+	"${FILESDIR}/vimb-content-filter.patch"
+)
 
 src_prepare() {
 	default
