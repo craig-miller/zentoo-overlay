@@ -86,7 +86,7 @@ src_install() {
 	# Helper for noctalia's [hooks].theme_mode_changed: takes dark|light
 	# on argv OR via $NOCTALIA_THEME_MODE env, rewrites the vimb config's
 	# `set dark-mode=` line, and pkill -USR2 -x vimb to reload the live
-	# session.  Wired up in ~/.config/noctalia/hooks.toml.
+	# session.  Wired up in ~/.config/noctalia/vimb-hook.toml.
 	dobin "${FILESDIR}/vimb-theme-flip"
 
 	save_config src/config.def.h
