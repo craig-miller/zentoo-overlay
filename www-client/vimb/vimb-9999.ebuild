@@ -13,20 +13,23 @@ HOMEPAGE="https://fanglingsu.github.io/vimb/"
 EGIT_REPO_URI="https://github.com/craig-miller/vimb.git"
 EGIT_BRANCH="zentoo"
 
-# Bundled Dark Reader library — installed to /usr/share/vimb/scripts.js
-# as the system-default userscript. The fork's user_scripts() falls back
-# to this path when a user ~/.config/vimb/scripts.js is absent (see fork
-# commit 306069d). Bump this + re-emerge to test upstream releases before
-# shipping.
+# Bundled Dark Reader library — installed to /usr/share/vimb/darkreader.js as
+# the DR-treatment engine when USE=dark-reader. The fork's user_scripts()
+# picks up the concatenated /usr/share/vimb/scripts.js (DR library + fork
+# bootstrap) as a fallback, and the dr-fixes tooling shipped alongside writes
+# a fixes-DB-aware /var/lib/vimb/scripts.js via a weekly cron. Bump this + re-
+# emerge to test upstream releases before shipping.
 DARKREADER_VER="4.9.128"
-SRC_URI="https://registry.npmjs.org/darkreader/-/darkreader-${DARKREADER_VER}.tgz -> darkreader-${DARKREADER_VER}.tgz"
+SRC_URI="dark-reader? (
+	https://registry.npmjs.org/darkreader/-/darkreader-${DARKREADER_VER}.tgz
+)"
 
 # GPL-3 for vimb itself and the fork sources; MIT for the bundled Dark
 # Reader library file. Mere aggregation — the licenses coexist in one
 # distribution package without derivative-work interaction.
-LICENSE="GPL-3 MIT"
+LICENSE="GPL-3 dark-reader? ( MIT )"
 SLOT="0"
-IUSE="savedconfig"
+IUSE="savedconfig +dark-reader"
 
 # WebKitGTK's media pipeline goes through GStreamer. Required plugin set
 # for a working browser on YouTube + general streaming sites:
@@ -75,13 +78,14 @@ BDEPEND="virtual/pkgconfig"
 RDEPEND="
 	${DEPEND}
 	app-misc/vimb-blocklist
+	dark-reader? ( sys-process/cronie )
 "
 
 src_unpack() {
-	# git-r3 clones the fork into ${WORKDIR}/${P}; the DR tarball unpacks
-	# to ${WORKDIR}/package/ (npm convention).
+	# git-r3 clones the fork into ${WORKDIR}/${P}. When USE=dark-reader the
+	# DR tarball also unpacks to ${WORKDIR}/package/ (npm convention).
 	git-r3_src_unpack
-	default
+	use dark-reader && default
 }
 
 src_prepare() {
@@ -107,19 +111,77 @@ src_install() {
 	# session.  Wired up in ~/.config/noctalia/vimb-hook.toml.
 	dobin "${FILESDIR}/vimb-theme-flip"
 
-	# System-default userscript: Dark Reader library concatenated with
-	# the fork's bootstrap (DarkReader.auto() call). The fork's
-	# user_scripts() falls back to this when ~/.config/vimb/scripts.js
-	# is absent. Users disable by touching an empty file at that path.
-	insinto /usr/share/vimb
-	newins - scripts.js < <(cat "${WORKDIR}/package/darkreader.js" \
-		"${S}/resources/scripts-bootstrap.js")
-
-	# System-default config: dark-mode=on, stylesheet=off, zm binding.
-	# Sourced by the fork's main.c before ~/.config/vimb/config, so user
-	# config overrides any of these values.
+	# System-default config: dark-mode=on + zm binding. Ships regardless of
+	# dark-reader USE — `set dark-mode=on` broadcasts prefers-color-scheme=dark
+	# to WebKit, an opinionated zentoo baseline independent of Dark Reader.
 	insinto /etc/vimb
 	newins "${S}/resources/etc-vimb-config" config
 
+	if use dark-reader; then
+		# Dark Reader library — installed standalone so the dr-fixes
+		# refresh script can concatenate it with a fixes-aware bootstrap
+		# and write the result to /var/lib/vimb/scripts.js. Also the left
+		# half of the fixes-free baseline scripts.js below.
+		insinto /usr/share/vimb
+		newins "${WORKDIR}/package/darkreader.js" darkreader.js
+
+		# Baseline userscript: DR library + the fork's fixes-free bootstrap.
+		# The fork's user_scripts() picks this up via SYSTEM_SCRIPT when
+		# neither ~/.config/vimb/scripts.js nor /var/lib/vimb/scripts.js
+		# exists. Users disable DR entirely by touching an empty file at
+		# ~/.config/vimb/scripts.js.
+		newins - scripts.js < <(cat "${WORKDIR}/package/darkreader.js" \
+			"${S}/resources/scripts-bootstrap.js")
+
+		# Dark Reader fixes-DB tooling: refresh script + bootstrap template
+		# + weekly cron. The refresh writes a fixes-aware scripts.js to
+		# /var/lib/vimb/scripts.js, which the fork's user_scripts() picks
+		# up via SYSTEM_SCRIPT_LOCAL (fork commit 42cb85c).
+		exeinto /usr/libexec
+		newexe "${S}/resources/dr-fixes/refresh" vimb-dr-fixes-refresh
+
+		insinto /usr/share/vimb-dr-fixes
+		doins "${S}/resources/dr-fixes/bootstrap.js"
+
+		exeinto /etc/cron.weekly
+		newexe "${S}/resources/dr-fixes/weekly-cron" vimb-dr-fixes
+
+		# Pre-create the state directory so refresh doesn't need to mkdir
+		# on first run (and so Portage tracks the ownership).
+		keepdir /var/lib/vimb
+	fi
+
 	save_config src/config.def.h
+}
+
+pkg_postinst() {
+	if use dark-reader; then
+		elog ""
+		elog "Refreshing /var/lib/vimb/scripts.js (fetch + parse Dark Reader fixes)."
+		elog ""
+		if /usr/libexec/vimb-dr-fixes-refresh; then
+			elog "Fixes ready. vimb will pick them up on next launch."
+		else
+			ewarn "Refresh failed — inspect the output above."
+			ewarn "The weekly cron will retry; run manually with:"
+			ewarn "  sudo /etc/cron.weekly/vimb-dr-fixes"
+		fi
+		elog ""
+		elog "Refresh cadence: weekly via /etc/cron.weekly/vimb-dr-fixes."
+		elog "Anacron handles missed runs on wake (cronie[+anacron])."
+		elog ""
+		elog "To disable Dark Reader without uninstalling, run:"
+		elog "    touch ~/.config/vimb/scripts.js"
+		elog ""
+	fi
+}
+
+pkg_postrm() {
+	# pkg_postinst writes /var/lib/vimb/scripts.js from the fetched fixes;
+	# we own it, so we clean it up. Guard on REPLACED_BY_VERSION so an
+	# upgrade doesn't churn the file between old-postrm and new-postinst.
+	if [[ -z ${REPLACED_BY_VERSION} ]]; then
+		rm -f "${ROOT}/var/lib/vimb/scripts.js"
+		rmdir --ignore-fail-on-non-empty "${ROOT}/var/lib/vimb" 2>/dev/null || true
+	fi
 }

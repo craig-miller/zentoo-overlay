@@ -11,4 +11,7 @@
 	<upstream>
 		<remote-id type="github">fanglingsu/vimb</remote-id>
 	</upstream>
+	<use>
+		<flag name="dark-reader">Bundle the Dark Reader library + fixes-DB refresh cron for automatic dark theming of sites that lack native dark-mode support</flag>
+	</use>
 </pkgmetadata>
