@@ -13,7 +13,18 @@ HOMEPAGE="https://fanglingsu.github.io/vimb/"
 EGIT_REPO_URI="https://github.com/craig-miller/vimb.git"
 EGIT_BRANCH="zentoo"
 
-LICENSE="GPL-3"
+# Bundled Dark Reader library — installed to /usr/share/vimb/scripts.js
+# as the system-default userscript. The fork's user_scripts() falls back
+# to this path when a user ~/.config/vimb/scripts.js is absent (see fork
+# commit 306069d). Bump this + re-emerge to test upstream releases before
+# shipping.
+DARKREADER_VER="4.9.128"
+SRC_URI="https://registry.npmjs.org/darkreader/-/darkreader-${DARKREADER_VER}.tgz -> darkreader-${DARKREADER_VER}.tgz"
+
+# GPL-3 for vimb itself and the fork sources; MIT for the bundled Dark
+# Reader library file. Mere aggregation — the licenses coexist in one
+# distribution package without derivative-work interaction.
+LICENSE="GPL-3 MIT"
 SLOT="0"
 IUSE="savedconfig"
 
@@ -66,6 +77,13 @@ RDEPEND="
 	app-misc/vimb-blocklist
 "
 
+src_unpack() {
+	# git-r3 clones the fork into ${WORKDIR}/${P}; the DR tarball unpacks
+	# to ${WORKDIR}/package/ (npm convention).
+	git-r3_src_unpack
+	default
+}
+
 src_prepare() {
 	default
 	restore_config config.def.h
@@ -88,6 +106,20 @@ src_install() {
 	# `set dark-mode=` line, and pkill -USR2 -x vimb to reload the live
 	# session.  Wired up in ~/.config/noctalia/vimb-hook.toml.
 	dobin "${FILESDIR}/vimb-theme-flip"
+
+	# System-default userscript: Dark Reader library concatenated with
+	# the fork's bootstrap (DarkReader.auto() call). The fork's
+	# user_scripts() falls back to this when ~/.config/vimb/scripts.js
+	# is absent. Users disable by touching an empty file at that path.
+	insinto /usr/share/vimb
+	newins - scripts.js < <(cat "${WORKDIR}/package/darkreader.js" \
+		"${S}/resources/scripts-bootstrap.js")
+
+	# System-default config: dark-mode=on, stylesheet=off, zm binding.
+	# Sourced by the fork's main.c before ~/.config/vimb/config, so user
+	# config overrides any of these values.
+	insinto /etc/vimb
+	newins "${S}/resources/etc-vimb-config" config
 
 	save_config src/config.def.h
 }
