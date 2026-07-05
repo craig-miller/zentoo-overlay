@@ -77,6 +77,7 @@ DEPEND="
 BDEPEND="virtual/pkgconfig"
 RDEPEND="
 	${DEPEND}
+	app-admin/pass
 	app-misc/vimb-blocklist
 	dark-reader? ( sys-process/cronie )
 "
