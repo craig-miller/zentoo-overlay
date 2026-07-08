@@ -5,7 +5,7 @@ EAPI=8
 
 inherit toolchain-funcs
 
-COMMIT="456ac7b74ee1a28b758cab443027d103cd1fd667"
+COMMIT="c8038a3562b79309932463966237d368a421d292"
 
 DESCRIPTION="Ambient-light auto-brightness for display + keyboard backlight (Asahi Linux)"
 HOMEPAGE="https://github.com/craig-miller/asahi-brightnessd"
