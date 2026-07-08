@@ -1,0 +1,21 @@
+diff --git a/src/pipewire/pipewire_service.cpp b/src/pipewire/pipewire_service.cpp
+index 8d9505eab..425c67948 100644
+--- a/src/pipewire/pipewire_service.cpp
++++ b/src/pipewire/pipewire_service.cpp
+@@ -556,6 +556,16 @@ namespace {
+ 
+   constexpr auto kScreenShareNamePrefixes = std::to_array<std::string_view>({
+       "xdph-streaming",
++      // zentoo fix: xdg-desktop-portal-wlr names its Video/Source PipeWire node
++      // "xdpw-stream-XXXXXX" and sets no media.name/streamTitle/application.name.
++      // isScreenSource() short-circuits the Video/Source class through the
++      // includeWeakPrefixes=false path in matchesScreenShareName(), so only the
++      // strong-prefix list here catches it — without this entry, every
++      // portal-wlr screencast falls through to the camera classifier and the
++      // privacy widget lights the camera glyph instead of the screen glyph.
++      // Affects niri, sway, hyprland, wayfire, etc. — every wlroots-family
++      // compositor using xdpw as its ScreenCast portal backend.
++      "xdpw-stream",
+       "gsr-default",
+       "game capture",
+       "screen",

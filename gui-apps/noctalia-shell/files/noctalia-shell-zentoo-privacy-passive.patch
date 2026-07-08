@@ -1,10 +1,11 @@
 diff --git a/src/pipewire/pipewire_service.cpp b/src/pipewire/pipewire_service.cpp
+index 8d9505eab..6ba59387f 100644
 --- a/src/pipewire/pipewire_service.cpp
 +++ b/src/pipewire/pipewire_service.cpp
-@@ -582,9 +582,18 @@
+@@ -622,8 +622,17 @@ namespace {
      return std::ranges::contains(kMicrophoneSourceClasses, nd.mediaClass);
    }
-
+ 
 +  // zentoo fix: also exclude nodes whose graph hop is passive (node.passive=true).
 +  // WirePlumber filter-chain inputs — e.g. the J316 mic chain that wraps the M1's
 +  // 3-channel RawMics source into a polished mono effect_output — keep a permanent
@@ -18,6 +19,5 @@ diff --git a/src/pipewire/pipewire_service.cpp b/src/pipewire/pipewire_service.c
 +    return std::ranges::contains(kAudioCaptureConsumerClasses, nd.mediaClass)
 +        && !nd.streamCaptureSink && !nd.nodePassive;
    }
-
+ 
    [[nodiscard]] bool isCameraSource(const PipeWireService::NodeData& nd) {
-     return std::ranges::contains(kCameraSourceClasses, nd.mediaClass);

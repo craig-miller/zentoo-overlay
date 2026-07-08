@@ -1,19 +1,18 @@
-diff --git a/src/app/application.cpp b/src/app/application.cpp
-index f44e7e0bf..0ee24179d 100644
---- a/src/app/application.cpp
-+++ b/src/app/application.cpp
-@@ -49,6 +49,10 @@
- #include "util/file_utils.h"
+diff --git a/src/app/application_ipc.cpp b/src/app/application_ipc.cpp
+index f4e37ed47..bded60d93 100644
+--- a/src/app/application_ipc.cpp
++++ b/src/app/application_ipc.cpp
+@@ -91,6 +91,9 @@
+ #include "util/string_utils.h"
  
  #include <algorithm>
-+// zentoo fix: brightness-suppress IPC handler uses std::from_chars for
-+// integer parsing of the duration argument (see brightness-suppress
-+// registerHandler below).
++// zentoo fix: <charconv> for std::from_chars in the brightness-suppress IPC
++// handler registered below (see the // zentoo fix: block near brightness-osd).
 +#include <charconv>
  #include <chrono>
  #include <cmath>
  #include <csignal>
-@@ -2027,6 +2031,32 @@ void Application::initIpc() {
+@@ -534,6 +537,32 @@ void Application::initIpc() {
        },
        "brightness-osd <value>", "Show brightness OSD without changing brightness"
    );
