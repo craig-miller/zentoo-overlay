@@ -1,0 +1,98 @@
+# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+
+inherit flag-o-matic meson xdg
+
+DESCRIPTION="Highly customizable & functional document viewer"
+HOMEPAGE="https://pwmt.org/projects/zathura/"
+SRC_URI="https://github.com/pwmt/zathura/archive/${PV}.tar.gz -> ${P}.tar.gz"
+
+LICENSE="ZLIB"
+SLOT="0/7.8" # plugin_api.abi (see meson.build)
+KEYWORDS="~arm64"
+IUSE="+man landlock seccomp synctex test +wayland X"
+RESTRICT="!test? ( test )"
+REQUIRED_USE="
+	test? ( wayland X )
+	|| ( wayland X )
+"
+
+RDEPEND="
+	dev-libs/json-glib
+	dev-db/sqlite:3
+	>=dev-libs/girara-2026.07.07:=
+	>=dev-libs/glib-2.76:2
+	sys-apps/file
+	x11-libs/cairo
+	>=gui-libs/gtk-4.12:4[wayland?,X?]
+	x11-libs/pango
+	man? ( dev-python/sphinx )
+	seccomp? ( sys-libs/libseccomp )
+	synctex? ( app-text/texlive-core )
+"
+DEPEND="
+	${RDEPEND}
+	>=sys-kernel/linux-headers-5.13
+"
+BDEPEND="
+	>=sys-devel/gettext-0.19.8
+	virtual/pkgconfig
+	test? (
+		dev-libs/appstream
+		dev-libs/weston[headless]
+		x11-misc/xvfb-run
+	)
+"
+
+src_prepare() {
+	default
+	# Upstream typo in the 2026.07.08 changelog: </issue> should be </p>.
+	# Reported/fix pending upstream.
+	sed -i 's|features</issue>|features</p>|' \
+		data/org.pwmt.zathura.metainfo.xml.in || die
+}
+
+src_configure() {
+	# defang automagic dependencies
+	use X || append-flags -DGENTOO_GTK_HIDE_X11
+	use wayland || append-flags -DGENTOO_GTK_HIDE_WAYLAND
+
+	local emesonargs=(
+		-Dconvert-icon=disabled
+		$(meson_feature man manpages)
+		$(meson_feature landlock)
+		$(meson_feature seccomp)
+		$(meson_feature synctex)
+		$(meson_feature test tests-x11)
+		$(meson_feature test tests-wayland)
+	)
+	meson_src_configure
+}
+
+src_install() {
+	meson_src_install
+
+	if use seccomp || use landlock; then
+		mv "${ED}"/usr/bin/zathura{,-full} || die
+		dosym zathura-sandbox /usr/bin/zathura
+	fi
+}
+
+pkg_postinst() {
+	xdg_pkg_postinst
+
+	if use seccomp || use landlock; then
+		elog "Zathura has been installed as a symlink to zathura-sandbox due to USE"
+		elog "seccomp or USE landlock.  Some features such as printing or hyperlinks"
+		elog "may be unavailable when running with the default executable (zathura)."
+		elog "If you require these features, you can temporarily switch to using"
+		elog "zathura-full or disable these use flags."
+		if ! use elibc_glibc; then
+			ewarn ""
+			ewarn "Upstream zathura does not test sandboxing rules on non-glibc"
+			ewarn "environments.  Your mileage may vary using the sandboxed variant."
+		fi
+	fi
+}
