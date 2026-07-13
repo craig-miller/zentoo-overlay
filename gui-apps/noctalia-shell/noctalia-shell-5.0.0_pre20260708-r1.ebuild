@@ -58,6 +58,7 @@ PATCHES=(
 	"${FILESDIR}"/noctalia-shell-zentoo-brightness-ipc.patch
 	"${FILESDIR}"/noctalia-shell-zentoo-privacy-passive.patch
 	"${FILESDIR}"/noctalia-shell-zentoo-privacy-xdpw.patch
+	"${FILESDIR}"/noctalia-shell-zentoo-templates-follow-symlinks.patch
 )
 
 src_configure() {

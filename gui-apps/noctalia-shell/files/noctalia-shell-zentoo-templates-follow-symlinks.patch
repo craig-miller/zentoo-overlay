@@ -1,0 +1,160 @@
+diff --git a/assets/templates/alacritty/apply.sh b/assets/templates/alacritty/apply.sh
+index 16c7d41b8..14d437c22 100755
+--- a/assets/templates/alacritty/apply.sh
++++ b/assets/templates/alacritty/apply.sh
+@@ -24,13 +24,14 @@ EOF
+ fi
+ 
+ if grep -q 'noctalia\.toml' "$config_file"; then
+-    sed -i 's|"themes/noctalia.toml"|"'"$theme_path"'"|g' "$config_file"
++    # zentoo fix: --follow-symlinks preserves stow symlinks (default sed -i writes to tempfile + rename, clobbering the symlink and breaking dotfile management).
++    sed -i --follow-symlinks 's|"themes/noctalia.toml"|"'"$theme_path"'"|g' "$config_file"
+ elif grep -q '^\[general\]' "$config_file"; then
+     if grep -q '^import\s*=' "$config_file"; then
+-        sed -i '/^import\s*=\s*\[/,/\]/{/\]/s|]|    "'"$theme_path"'",\n]|}' "$config_file"
++        sed -i --follow-symlinks '/^import\s*=\s*\[/,/\]/{/\]/s|]|    "'"$theme_path"'",\n]|}' "$config_file"
+     else
+-        sed -i '/^\[general\]/a import = ["'"$theme_path"'"]' "$config_file"
++        sed -i --follow-symlinks '/^\[general\]/a import = ["'"$theme_path"'"]' "$config_file"
+     fi
+ else
+-    sed -i '1i [general]\nimport = ["'"$theme_path"'"]\n' "$config_file"
++    sed -i --follow-symlinks '1i [general]\nimport = ["'"$theme_path"'"]\n' "$config_file"
+ fi
+diff --git a/assets/templates/btop/apply.sh b/assets/templates/btop/apply.sh
+index 228985d80..131fe9290 100755
+--- a/assets/templates/btop/apply.sh
++++ b/assets/templates/btop/apply.sh
+@@ -11,7 +11,8 @@ fi
+ if grep -qE '^color_theme\s*=\s*"noctalia"' "$config_file"; then
+     :
+ elif grep -qE '^color_theme\s*=' "$config_file"; then
+-    sed -i -E 's/^color_theme\s*=.*/color_theme = "noctalia"/' "$config_file"
++    # zentoo fix: --follow-symlinks preserves stow symlinks (default sed -i writes to tempfile + rename, clobbering the symlink and breaking dotfile management).
++    sed -i --follow-symlinks -E 's/^color_theme\s*=.*/color_theme = "noctalia"/' "$config_file"
+ else
+     [ -s "$config_file" ] && [ -n "$(tail -c1 "$config_file")" ] && echo >>"$config_file"
+     echo 'color_theme = "noctalia"' >>"$config_file"
+diff --git a/assets/templates/cava/apply.sh b/assets/templates/cava/apply.sh
+index 67acd9bed..d1fb47934 100644
+--- a/assets/templates/cava/apply.sh
++++ b/assets/templates/cava/apply.sh
+@@ -12,9 +12,10 @@ if grep -q '^\[color\]' "$config_file"; then
+     if sed -n '/^\[color\]/,/^\[/p' "$config_file" | grep -qE '^theme\s*=\s*"noctalia"'; then
+         :
+     elif sed -n '/^\[color\]/,/^\[/p' "$config_file" | grep -qE '^theme\s*='; then
+-        sed -i -E '/^\[color\]/,/^\[/{s/^theme\s*=.*/theme = "noctalia"/}' "$config_file"
++        # zentoo fix: --follow-symlinks preserves stow symlinks (default sed -i writes to tempfile + rename, clobbering the symlink and breaking dotfile management).
++        sed -i --follow-symlinks -E '/^\[color\]/,/^\[/{s/^theme\s*=.*/theme = "noctalia"/}' "$config_file"
+     else
+-        sed -i '/^\[color\]/a theme = "noctalia"' "$config_file"
++        sed -i --follow-symlinks '/^\[color\]/a theme = "noctalia"' "$config_file"
+     fi
+ else
+     printf '\n[color]\ntheme = "noctalia"\n' >>"$config_file"
+diff --git a/assets/templates/foot/apply.sh b/assets/templates/foot/apply.sh
+index 81866e841..8ac81e79b 100755
+--- a/assets/templates/foot/apply.sh
++++ b/assets/templates/foot/apply.sh
+@@ -20,10 +20,11 @@ if [ ! -f "$config_file" ]; then
+ $include_line
+ EOF
+ elif ! grep -q 'include.*noctalia' "$config_file"; then
+-    sed -i '/include=.*themes/d' "$config_file"
++    # zentoo fix: --follow-symlinks preserves stow symlinks (default sed -i writes to tempfile + rename, clobbering the symlink and breaking dotfile management).
++    sed -i --follow-symlinks '/include=.*themes/d' "$config_file"
+     if grep -q '^\[main\]' "$config_file"; then
+-        sed -i '/^\[main\]/a '"$include_line" "$config_file"
++        sed -i --follow-symlinks '/^\[main\]/a '"$include_line" "$config_file"
+     else
+-        sed -i '1i [main]\n'"$include_line"'\n' "$config_file"
++        sed -i --follow-symlinks '1i [main]\n'"$include_line"'\n' "$config_file"
+     fi
+ fi
+diff --git a/assets/templates/ghostty/apply.sh b/assets/templates/ghostty/apply.sh
+index 9ccceb659..419f45674 100755
+--- a/assets/templates/ghostty/apply.sh
++++ b/assets/templates/ghostty/apply.sh
+@@ -11,7 +11,8 @@ for config_file in "${config_files[@]}"; do
+     if grep -qE '^theme\s*=\s*noctalia$' "$config_file"; then
+         :
+     elif grep -qE '^theme\s*=' "$config_file"; then
+-        sed -i -E 's/^theme\s*=.*/theme = noctalia/' "$config_file"
++        # zentoo fix: --follow-symlinks preserves stow symlinks (default sed -i writes to tempfile + rename, clobbering the symlink and breaking dotfile management).
++        sed -i --follow-symlinks -E 's/^theme\s*=.*/theme = noctalia/' "$config_file"
+     else
+         [ -s "$config_file" ] && [ -n "$(tail -c1 "$config_file")" ] && echo >>"$config_file"
+         echo "theme = noctalia" >>"$config_file"
+diff --git a/assets/templates/labwc/apply.sh b/assets/templates/labwc/apply.sh
+index b78b7c182..e2b004dab 100644
+--- a/assets/templates/labwc/apply.sh
++++ b/assets/templates/labwc/apply.sh
+@@ -32,9 +32,10 @@ if grep -q '<theme>' "$rc_file"; then
+     fi
+ 
+     if sed -n '/<theme>/,/<\/theme>/p' "$rc_file" | grep -q '<name>.*</name>'; then
+-        sed -i '/<theme>/,/<\/theme>/s|<name>.*</name>|<name>noctalia</name>|' "$rc_file"
++        # zentoo fix: --follow-symlinks preserves stow symlinks (default sed -i writes to tempfile + rename, clobbering the symlink and breaking dotfile management).
++        sed -i --follow-symlinks '/<theme>/,/<\/theme>/s|<name>.*</name>|<name>noctalia</name>|' "$rc_file"
+     else
+-        sed -i '/<theme>/a\    <name>noctalia</name>' "$rc_file"
++        sed -i --follow-symlinks '/<theme>/a\    <name>noctalia</name>' "$rc_file"
+     fi
+ else
+     if ! grep -qE '<labwc_config([[:space:]>])' "$rc_file"; then
+@@ -42,5 +43,5 @@ else
+         exit 1
+     fi
+ 
+-    sed -i '/<labwc_config[[:space:]>]/a\  <theme>\n    <name>noctalia</name>\n  </theme>' "$rc_file"
++    sed -i --follow-symlinks '/<labwc_config[[:space:]>]/a\  <theme>\n    <name>noctalia</name>\n  </theme>' "$rc_file"
+ fi
+diff --git a/assets/templates/starship/apply.sh b/assets/templates/starship/apply.sh
+index dc3482594..c51122359 100755
+--- a/assets/templates/starship/apply.sh
++++ b/assets/templates/starship/apply.sh
+@@ -77,21 +77,22 @@ if [ ! -f "$config_file" ]; then
+     echo 'palette = "noctalia"' >"$config_file"
+ else
+     if grep -qE '^palette\s*=' "$config_file"; then
+-        sed -i -E 's/^palette\s*=.*/palette = "noctalia"/' "$config_file"
++        # zentoo fix: --follow-symlinks preserves stow symlinks (default sed -i writes to tempfile + rename, clobbering the symlink and breaking dotfile management).
++        sed -i --follow-symlinks -E 's/^palette\s*=.*/palette = "noctalia"/' "$config_file"
+     elif grep -qE '^"\$schema"' "$config_file"; then
+-        sed -i '/^"\$schema"/a palette = "noctalia"' "$config_file"
++        sed -i --follow-symlinks '/^"\$schema"/a palette = "noctalia"' "$config_file"
+     else
+-        sed -i '1i palette = "noctalia"' "$config_file"
++        sed -i --follow-symlinks '1i palette = "noctalia"' "$config_file"
+     fi
+ 
+     if grep -qF "$marker_begin" "$config_file"; then
+         begin_regex=$(printf '%s' "$marker_begin" | sed 's/[[\.*^$()+?{|]/\\&/g')
+         end_regex=$(printf '%s' "$marker_end" | sed 's/[[\.*^$()+?{|]/\\&/g')
+-        sed -i "/$begin_regex/,/$end_regex/d" "$config_file"
++        sed -i --follow-symlinks "/$begin_regex/,/$end_regex/d" "$config_file"
+     fi
+ 
+     # Drop trailing blank lines so the leading newline below does not accumulate
+-    sed -i -e :a -e '/^\n*$/{$d;N;ba}' "$config_file"
++    sed -i --follow-symlinks -e :a -e '/^\n*$/{$d;N;ba}' "$config_file"
+ fi
+ 
+ {
+diff --git a/assets/templates/wezterm/apply.sh b/assets/templates/wezterm/apply.sh
+index 81a1b52bb..8c3693119 100755
+--- a/assets/templates/wezterm/apply.sh
++++ b/assets/templates/wezterm/apply.sh
+@@ -11,9 +11,10 @@ fi
+ 
+ if ! grep -q "^\s*config\.color_scheme\s*=\s*['\"]Noctalia['\"]\s*" "$config_file"; then
+     if grep -q '^\s*config\.color_scheme\s*=' "$config_file"; then
+-        sed -i "s|^\(\s*config\.color_scheme\s*=\s*\).*$|\1\"Noctalia\"|" "$config_file"
++        # zentoo fix: --follow-symlinks preserves stow symlinks (default sed -i writes to tempfile + rename, clobbering the symlink and breaking dotfile management).
++        sed -i --follow-symlinks "s|^\(\s*config\.color_scheme\s*=\s*\).*$|\1\"Noctalia\"|" "$config_file"
+     elif grep -q '^\s*return\s*config' "$config_file"; then
+-        sed -i '/^\s*return\s*config/i\'"$scheme_line" "$config_file"
++        sed -i --follow-symlinks '/^\s*return\s*config/i\'"$scheme_line" "$config_file"
+     else
+         echo "Warning: config.color_scheme not set and return config not found in $config_file" >&2
+     fi
