@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>2132647+craig-miller@users.noreply.github.com</email>
+		<name>Craig Miller</name>
+	</maintainer>
+	<longdescription>
+		Calepin brings executable code into native Typst documents so
+		reports, papers, and slides can compute tables, numbers, and
+		figures during rendering in a reproducible workflow. Supports
+		Python and R natively, plus any Jupyter kernel (Julia, Bash,
+		Octave, Gnuplot).
+	</longdescription>
+	<upstream>
+		<remote-id type="github">vincentarelbundock/calepin</remote-id>
+	</upstream>
+</pkgmetadata>
