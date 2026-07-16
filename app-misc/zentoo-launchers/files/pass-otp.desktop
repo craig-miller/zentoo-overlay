@@ -3,6 +3,6 @@ Type=Application
 Name=Pass OTP
 Comment=Pick a TOTP code, watch it tick, copy on Enter
 Exec=foot --app-id=pass-otp-picker fish -c po
-Icon=changes-prevent-symbolic
+Icon=keyring-manager
 Terminal=false
 Categories=Utility;Security;

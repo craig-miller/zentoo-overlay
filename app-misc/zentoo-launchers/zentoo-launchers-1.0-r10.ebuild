@@ -25,6 +25,7 @@ RDEPEND="
 	net-fs/samba
 	gui-apps/wl-clipboard
 	gnome-base/gvfs
+     media-sound/qobuz-player
 "
 
 src_install() {

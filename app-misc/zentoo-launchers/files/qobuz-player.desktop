@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Music
+Comment=Hi-res music streaming from Qobuz
+Exec=foot --app-id=qobuz-player qobuz-player
+Icon=rhythmbox
+Terminal=false
+Categories=AudioVideo;Audio;Player;
