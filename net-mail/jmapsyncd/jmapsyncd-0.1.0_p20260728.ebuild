@@ -316,7 +316,7 @@ CRATES="
 
 inherit cargo
 
-JMAPSYNCD_COMMIT="2dd59b1f25f63ebc2fd0a13c1a7103bde67daab5"
+JMAPSYNCD_COMMIT="8450b30358a7a8fa922dd6cfc63b47fa0cbb1793"
 
 DESCRIPTION="JMAP <-> Maildir sync daemon (craig-miller fork with sync engine + daemon)"
 HOMEPAGE="https://github.com/craig-miller/jmapsyncd"
