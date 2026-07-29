@@ -316,12 +316,20 @@ CRATES="
 
 inherit cargo
 
-JMAPSYNCD_COMMIT="8450b30358a7a8fa922dd6cfc63b47fa0cbb1793"
+JMAPSYNCD_COMMIT="1a60c933b04126ba677c39a3a109b622c728ddaa"
+# jmapsyncd Cargo.toml carries a [patch.crates-io] pin at the
+# craig-miller/jmap-client zentoo branch — the upstream 0.4.2 SSE parser
+# crashes on Fastmail's opening keep-alive frame (see the patch commit).
+# Portage's cargo eclass builds --offline so we can't let cargo git-fetch
+# at compile time; bundle the fork tarball via SRC_URI and rewrite the
+# Cargo.toml patch line to a local-path dep in src_prepare.
+JMAP_CLIENT_COMMIT="bf59494382796df2aa8ce5e76e077c15627f7ceb"
 
 DESCRIPTION="JMAP <-> Maildir sync daemon (craig-miller fork with sync engine + daemon)"
 HOMEPAGE="https://github.com/craig-miller/jmapsyncd"
 SRC_URI="
 	https://github.com/craig-miller/${PN}/archive/${JMAPSYNCD_COMMIT}.tar.gz -> ${P}.tar.gz
+	https://github.com/craig-miller/jmap-client/archive/${JMAP_CLIENT_COMMIT}.tar.gz -> jmap-client-${JMAP_CLIENT_COMMIT}.tar.gz
 	${CARGO_CRATE_URIS}
 "
 S="${WORKDIR}/${PN}-${JMAPSYNCD_COMMIT}"
@@ -334,3 +342,13 @@ LICENSE+="
 "
 SLOT="0"
 KEYWORDS="~arm64"
+
+src_prepare() {
+	# Point the [patch.crates-io] jmap-client entry at the jmap-client
+	# fork tarball we unpacked next to S (via the extra SRC_URI above)
+	# instead of the git URL that cargo can't reach in Portage's sandbox.
+	sed -i \
+		-e "s|jmap-client = { git = .*|jmap-client = { path = \"${WORKDIR}/jmap-client-${JMAP_CLIENT_COMMIT}\" }|" \
+		"${S}/Cargo.toml" || die "failed to redirect jmap-client patch dep"
+	default
+}
