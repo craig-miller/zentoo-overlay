@@ -1,0 +1,203 @@
+diff -ruN swiftly-src-orig/Sources/LinuxPlatform/Linux.swift swiftly-src/Sources/LinuxPlatform/Linux.swift
+--- a/Sources/LinuxPlatform/Linux.swift	2026-08-02 18:25:16
++++ b/Sources/LinuxPlatform/Linux.swift	2026-08-02 18:30:34
+@@ -590,6 +590,10 @@
+             PlatformDefinition.ubuntu1804, .ubuntu2004, .ubuntu2204, .ubuntu2404, .debian12, .fedora39,
+         ].first(where: { $0.name == id + versionID }) {
+             return pd
++        } else if (id + (idlike ?? "")).contains("gentoo") {
++            // No prebuilt Swift on swift.org for Gentoo; swiftly uses the
++            // system toolchain (see systemToolchains auto-detection).
++            return .gentoo
+         }
+ 
+         let message = "Unsupported Linux platform"
+@@ -611,9 +615,69 @@
+         return "/bin/bash"
+     }
+ 
+-    public func findToolchainLocation(_ ctx: SwiftlyCoreContext, _ toolchain: ToolchainVersion) -> FilePath
++    public func findToolchainLocation(_ ctx: SwiftlyCoreContext, _ toolchain: ToolchainVersion) async throws -> FilePath
+     {
+-        self.swiftlyToolchainsDir(ctx) / "\(toolchain.name)"
++        // A system (distro-managed) toolchain resolves to its real location,
++        // never into swiftly's own toolchains directory.
++        if let location = await self.detectSystemToolchains(ctx)[toolchain] {
++            return location
++        }
++        return self.swiftlyToolchainsDir(ctx) / "\(toolchain.name)"
++    }
++
++    public func detectSystemToolchains(_ ctx: SwiftlyCoreContext) async -> [ToolchainVersion: FilePath] {
++        guard let (version, location) = await self.systemSwift(ctx) else {
++            return [:]
++        }
++        return [version: location]
++    }
++
++    /// Locate a distro-provided Swift toolchain that swiftly does not manage and
++    /// return its version and install location. Generic across Linux distros: it
++    /// finds `swift` on PATH (skipping swiftly's own proxy bin dir), fully
++    /// resolves it, asks it for its version, and derives the toolchain root.
++    private func systemSwift(_ ctx: SwiftlyCoreContext) async -> (ToolchainVersion, FilePath)? {
++        let swiftlyBin = self.swiftlyBinDir(ctx)
++        let swiftlyHome = self.swiftlyHomeDir(ctx).string
++
++        var candidates: [FilePath] = []
++        if let pathVar = ProcessInfo.processInfo.environment["PATH"] {
++            for dir in pathVar.split(separator: ":", omittingEmptySubsequences: true) {
++                let d = FilePath(String(dir))
++                if d == swiftlyBin { continue }
++                candidates.append(d / "swift")
++            }
++        }
++        candidates.append(FilePath("/usr/bin/swift"))
++
++        for candidate in candidates {
++            guard (try? await fs.exists(atPath: candidate)) == true else { continue }
++            // Fully resolve symlinks (eselect on Gentoo, alternatives, etc.).
++            let resolvedOut = (try? await self.runProgramOutput("/usr/bin/readlink", "-f", candidate.string)) ?? nil
++            guard let resolvedOut else { continue }
++            let resolved = resolvedOut.trimmingCharacters(in: .whitespacesAndNewlines)
++            // Never treat a swiftly-managed toolchain or its own proxy as "system".
++            guard !resolved.isEmpty, !resolved.hasPrefix(swiftlyHome) else { continue }
++            // Ask the toolchain for its version.
++            let versionOut = (try? await self.runProgramOutput(candidate.string, "--version")) ?? nil
++            guard let versionOut, let version = Self.parseSwiftVersion(versionOut) else { continue }
++            // Linux toolchains live at <root>/usr/bin/<exe>; strip those three
++            // components to get the root swiftly should point at.
++            let location = FilePath(resolved).removingLastComponent().removingLastComponent()
++                .removingLastComponent()
++            return (version, location)
++        }
++        return nil
++    }
++
++    /// Parse "Swift version X.Y[.Z] ..." from `swift --version` output.
++    static func parseSwiftVersion(_ output: String) -> ToolchainVersion? {
++        guard let marker = output.range(of: "Swift version ") else { return nil }
++        let digits = output[marker.upperBound...].prefix { $0.isNumber || $0 == "." }
++        let parts = digits.split(separator: ".").compactMap { Int($0) }
++        guard parts.count >= 2 else { return nil }
++        let patch = parts.count >= 3 ? parts[2] : 0
++        return try? ToolchainVersion(parsing: "\(parts[0]).\(parts[1]).\(patch)")
+     }
+ 
+     public static let currentPlatform: any Platform = Linux()
+diff -ruN swiftly-src-orig/Sources/Swiftly/Config.swift swiftly-src/Sources/Swiftly/Config.swift
+--- a/Sources/Swiftly/Config.swift	2026-08-02 18:25:16
++++ b/Sources/Swiftly/Config.swift	2026-08-02 18:29:00
+@@ -1,5 +1,6 @@
+ import Foundation
+ import SwiftlyCore
++import SystemPackage
+ 
+ /// Struct modelling the config.json file used to track installed toolchains,
+ /// the current in-use tooolchain, and information about the platform.
+@@ -11,6 +12,17 @@
+     public var platform: PlatformDefinition
+     public var version: SwiftlyVersion
+ 
++    /// Externally-managed "system" toolchains (a distro-packaged Swift on Linux)
++    /// mapped to their on-disk location. Detected fresh in `Config.load` and NOT
++    /// persisted to config.json — it always reflects the currently active system
++    /// toolchain. Populated via `Platform.detectSystemToolchains`.
++    public var systemToolchains: [ToolchainVersion: FilePath] = [:]
++
++    /// Only these keys are persisted; `systemToolchains` is derived at load time.
++    enum CodingKeys: String, CodingKey {
++        case inUse, installedToolchains, platform, version
++    }
++
+     init(inUse: ToolchainVersion?, installedToolchains: Set<ToolchainVersion>, platform: PlatformDefinition, version: SwiftlyVersion) {
+         self.inUse = inUse
+         self.installedToolchains = installedToolchains
+@@ -29,7 +41,10 @@
+         do {
+             let configFile = Swiftly.currentPlatform.swiftlyConfigFile(ctx)
+             let data = try await fs.cat(atPath: configFile)
+-            let config = try JSONDecoder().decode(Config.self, from: data)
++            var config = try JSONDecoder().decode(Config.self, from: data)
++            // Derive externally-managed system toolchains fresh each load so the
++            // set always reflects the currently active system Swift.
++            config.systemToolchains = await Swiftly.currentPlatform.detectSystemToolchains(ctx)
+ 
+             return config
+         } catch {
+@@ -52,7 +67,7 @@
+ #if os(macOS)
+         let systemToolchains: [ToolchainVersion] = [.xcodeVersion]
+ #else
+-        let systemToolchains: [ToolchainVersion] = []
++        let systemToolchains: [ToolchainVersion] = Array(self.systemToolchains.keys)
+ #endif
+ 
+         guard let selector else {
+diff -ruN swiftly-src-orig/Sources/Swiftly/Install.swift swiftly-src/Sources/Swiftly/Install.swift
+--- a/Sources/Swiftly/Install.swift	2026-08-02 18:25:16
++++ b/Sources/Swiftly/Install.swift	2026-08-02 18:30:50
+@@ -250,7 +250,9 @@
+         assumeYes: Bool,
+         progressFile: FilePath? = nil
+     ) async throws -> (postInstall: String?, pathChanged: Bool) {
+-        guard !config.installedToolchains.contains(version) else {
++        // A system (distro-managed) toolchain is already present and must not be
++        // downloaded over; treat it as already installed.
++        guard !config.installedToolchains.contains(version), config.systemToolchains[version] == nil else {
+             let installInfo = InstallInfo(
+                 version: version, alreadyInstalled: true
+             )
+diff -ruN swiftly-src-orig/Sources/Swiftly/Uninstall.swift swiftly-src/Sources/Swiftly/Uninstall.swift
+--- a/Sources/Swiftly/Uninstall.swift	2026-08-02 18:25:16
++++ b/Sources/Swiftly/Uninstall.swift	2026-08-02 18:30:43
+@@ -75,6 +75,9 @@
+         // Filter out the xcode toolchain here since it is not uninstallable
+         toolchains.removeAll(where: { $0 == .xcodeVersion })
+ 
++        // System (distro-managed) toolchains are not swiftly's to remove.
++        toolchains.removeAll(where: { startingConfig.systemToolchains.keys.contains($0) })
++
+         guard !toolchains.isEmpty else {
+             await ctx.message("No toolchains can be uninstalled that match \"\(self.toolchain)\"")
+             return
+diff -ruN swiftly-src-orig/Sources/SwiftlyCore/Platform.swift swiftly-src/Sources/SwiftlyCore/Platform.swift
+--- a/Sources/SwiftlyCore/Platform.swift	2026-08-02 18:25:16
++++ b/Sources/SwiftlyCore/Platform.swift	2026-08-02 18:29:29
+@@ -46,6 +46,13 @@
+     public static let debian12 = PlatformDefinition(
+         name: "debian12", nameFull: "debian12", namePretty: "Debian GNU/Linux 12"
+     )
++
++    /// Gentoo does not have prebuilt Swift toolchains on swift.org; swiftly uses
++    /// the system-provided toolchain (see the system-toolchain auto-detection in
++    /// listInstalledToolchains / findToolchainLocation) rather than downloading.
++    public static let gentoo = PlatformDefinition(
++        name: "gentoo", nameFull: "gentoo", namePretty: "Gentoo Linux"
++    )
+ }
+ 
+ public struct RunProgramError: Swift.Error {
+@@ -133,6 +140,11 @@
+ 
+     /// Find the location of the toolchain binaries.
+     func findToolchainBinDir(_ ctx: SwiftlyCoreContext, _ toolchain: ToolchainVersion) async throws -> FilePath
++
++    /// Detect externally-managed "system" toolchains (e.g. a distro-packaged
++    /// Swift on Linux) that were not installed by swiftly, mapped to their
++    /// on-disk install location. Returns an empty map when there are none.
++    func detectSystemToolchains(_ ctx: SwiftlyCoreContext) async -> [ToolchainVersion: FilePath]
+ }
+ 
+ extension Platform {
+@@ -158,6 +170,11 @@
+     /// The path of the configuration file in swiftly's home directory.
+     public func swiftlyConfigFile(_ ctx: SwiftlyCoreContext) -> FilePath {
+         self.swiftlyHomeDir(ctx) / "config.json"
++    }
++
++    /// Platforms without a system-managed toolchain concept have none by default.
++    public func detectSystemToolchains(_ ctx: SwiftlyCoreContext) async -> [ToolchainVersion: FilePath] {
++        [:]
+     }
+ 
+ #if os(macOS) || os(Linux)
