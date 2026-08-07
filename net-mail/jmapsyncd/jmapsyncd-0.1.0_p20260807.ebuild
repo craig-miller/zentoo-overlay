@@ -94,6 +94,8 @@ CRATES="
 	http-body@1.0.1
 	http@1.4.1
 	httparse@1.10.1
+
+	hostname@0.4.2
 	httpdate@1.0.3
 	hyper-rustls@0.27.9
 	hyper-util@0.1.20
@@ -140,6 +142,8 @@ CRATES="
 	lru-slab@0.1.2
 	maildir@0.4.4
 	mailparse@0.13.8
+
+	mailparse@0.16.1
 	maybe-async@0.2.11
 	memchr@2.8.1
 	mio@1.2.1
@@ -167,6 +171,8 @@ CRATES="
 	quinn@0.11.11
 	quote@1.0.45
 	quoted_printable@0.4.8
+
+	quoted_printable@0.5.2
 	r-efi@5.3.0
 	r-efi@6.0.0
 	rand@0.10.2
@@ -244,6 +250,8 @@ CRATES="
 	try-lock@0.2.5
 	tungstenite@0.29.0
 	typenum@1.20.1
+
+	ulid@1.2.1
 	unicode-ident@1.0.24
 	unicode-xid@0.2.6
 	untrusted@0.9.0
