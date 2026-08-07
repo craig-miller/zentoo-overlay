@@ -316,14 +316,14 @@ CRATES="
 
 inherit cargo
 
-JMAPSYNCD_COMMIT="b4b5b750200da67873b16dfd438211cc4298b997"
+JMAPSYNCD_COMMIT="1533f6c83bc11f46785653a5be521fbf412f10e7"
 # jmapsyncd Cargo.toml carries a [patch.crates-io] pin at the
 # craig-miller/jmap-client zentoo branch — the upstream 0.4.2 SSE parser
 # crashes on Fastmail's opening keep-alive frame (see the patch commit).
 # Portage's cargo eclass builds --offline so we can't let cargo git-fetch
 # at compile time; bundle the fork tarball via SRC_URI and rewrite the
 # Cargo.toml patch line to a local-path dep in src_prepare.
-JMAP_CLIENT_COMMIT="bf59494382796df2aa8ce5e76e077c15627f7ceb"
+JMAP_CLIENT_COMMIT="9e7b01a3e0eed2157f76bc39b7712337a57224e9"
 
 DESCRIPTION="JMAP <-> Maildir sync daemon (craig-miller fork with sync engine + daemon)"
 HOMEPAGE="https://github.com/craig-miller/jmapsyncd"

@@ -1,5 +1,6 @@
 app-laptop
 app-portage
 gui-apps
-x11-themes
 media-sound
+net-mail
+x11-themes
