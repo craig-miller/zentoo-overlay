@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		zeta is a language server that treats a directory of Typst files as a
+		note graph. It resolves #link("...") calls between notes to provide
+		go-to-definition (follow a link), find-references (backlinks),
+		workspace-symbol search over all notes, broken-link diagnostics, and a
+		live force-directed graph view served to the browser over WebSocket.
+		Used on zentoo to add a Zettelkasten interconnect layer over the
+		papis/Typst research library.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">lentilus/zeta</remote-id>
+	</upstream>
+</pkgmetadata>
