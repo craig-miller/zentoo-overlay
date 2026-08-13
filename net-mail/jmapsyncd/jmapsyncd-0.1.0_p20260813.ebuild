@@ -68,6 +68,7 @@ CRATES="
 	form_urlencoded@1.2.2
 	fs_extra@1.3.0
 	fsevent-sys@4.1.0
+	fs2@0.4.3
 	futures-channel@0.3.32
 	futures-core@0.3.32
 	futures-executor@0.3.32
@@ -324,7 +325,7 @@ CRATES="
 
 inherit cargo
 
-JMAPSYNCD_COMMIT="1533f6c83bc11f46785653a5be521fbf412f10e7"
+JMAPSYNCD_COMMIT="c81c7a90d1472ab5776fb36d523fe412477eee2f"
 # jmapsyncd Cargo.toml carries a [patch.crates-io] pin at the
 # craig-miller/jmap-client zentoo branch — the upstream 0.4.2 SSE parser
 # crashes on Fastmail's opening keep-alive frame (see the patch commit).
