@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		Sioyek is a Qt-based PDF viewer built for reading research papers and
+		technical books. It provides fast keyboard-driven navigation, a smart
+		back/forward stack that follows cross-references and citations, split
+		views, per-document command macros, and a persistent SQLite highlight
+		database. Vendors mupdf and zlib to keep those on a known-good pin
+		independent of the system's mupdf.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">ahrm/sioyek</remote-id>
+	</upstream>
+</pkgmetadata>
