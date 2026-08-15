@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Sioyek URL handler
+Comment=Route sioyek:// URLs to the sioyek-proto proxy (page + yloc parsing)
+Exec=/usr/bin/sioyek-proto %u
+Terminal=false
+NoDisplay=true
+MimeType=x-scheme-handler/sioyek;

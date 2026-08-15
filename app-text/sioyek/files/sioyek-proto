@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Sioyek URL scheme handler.
+#
+# Parses sioyek:// URLs of the form:
+#     sioyek:///abs/path/to.pdf
+#     sioyek:///abs/path/to.pdf?page=N
+#     sioyek:///abs/path/to.pdf?page=N&yloc=Y
+#
+# `page=N` is display page (1-indexed as users read it). Sioyek's own
+# --page argument has an off-by-one (--page 3 lands on display page 2 on
+# WebKitGTK 6.0 / current sioyek), so this proxy passes --page (N+1) to
+# compensate. Same +1 convention the file:// card emission used
+# historically.
+#
+# `yloc=Y` is absolute document-Y (as read from sioyek's shared.db
+# highlight rows). When present, a second sioyek invocation runs after a
+# short delay to precisely center via goto_highlight IPC — matches the
+# two-step launch pattern used by nvim <leader>pj.
+#
+# Registered as x-scheme-handler/sioyek via
+# /usr/share/applications/sioyek-scheme.desktop AND fired from vimb via
+# the `handler-add sioyek=/usr/bin/sioyek-proto %s` line in
+# /etc/vimb/config (shipped by the vimb fork).
+
+set -eu
+
+url="${1:-}"
+if [ -z "$url" ]; then
+    echo "sioyek-proto: no URL provided" >&2
+    exit 2
+fi
+
+# Strip scheme + normalize to a leading-slash absolute path. Tolerate both
+# sioyek:///abs (standard triple-slash) and sioyek://abs (double-slash).
+noscheme="${url#sioyek:}"
+while [[ "$noscheme" == /* ]]; do
+    noscheme="${noscheme#/}"
+done
+noscheme="/$noscheme"
+
+# Split path?query.
+if [[ "$noscheme" == *\?* ]]; then
+    path_part="${noscheme%%\?*}"
+    query="${noscheme#*\?}"
+else
+    path_part="$noscheme"
+    query=""
+fi
+
+urldecode() {
+    local s="${1//+/ }"
+    printf '%b' "${s//%/\\x}"
+}
+
+path="$(urldecode "$path_part")"
+
+page=""
+yloc=""
+if [ -n "$query" ]; then
+    IFS='&' read -ra pairs <<< "$query"
+    for pair in "${pairs[@]}"; do
+        key="${pair%%=*}"
+        val="${pair#*=}"
+        val="$(urldecode "$val")"
+        case "$key" in
+            page) page="$val" ;;
+            yloc) yloc="$val" ;;
+        esac
+    done
+fi
+
+if [ ! -f "$path" ]; then
+    echo "sioyek-proto: file not found: $path" >&2
+    exit 3
+fi
+
+# Step 1: cold-open safe. sioyek --page N-1 shows display page N in the
+# viewer window; compensate with +1 so callers pass display page directly.
+args=("$path")
+if [ -n "$page" ]; then
+    args+=(--page "$((page + 1))")
+fi
+setsid sioyek "${args[@]}" >/dev/null 2>&1 &
+disown
+
+# Step 2: focus + optional precise-Y centering.
+#
+# Sioyek's second-instance dispatch (via QLocalSocket) reaches the primary
+# window without raising it — cold-open gets focus naturally from the
+# compositor mapping the new window, but a warm dispatch leaves sioyek
+# behind whatever was on top (the browser we came from). Explicit focus
+# via the niri IPC after a short settle ensures the window comes forward
+# either way. No-ops silently if niri isn't available or jq isn't
+# installed (proxy still works for both flavors of sioyek launch).
+#
+# Precise-Y (goto_highlight IPC) runs in the same background job so
+# focus and centering share the same 0.5s cold-open budget.
+(
+    sleep 0.15
+    if command -v niri >/dev/null 2>&1 \
+        && command -v jq >/dev/null 2>&1 \
+        && [ -n "${NIRI_SOCKET:-}" ]
+    then
+        wid="$(
+            niri msg --json windows 2>/dev/null \
+                | jq -r '[.[] | select((.app_id // "") | test("sioyek"; "i"))] | first | .id // empty'
+        )"
+        if [ -n "$wid" ]; then
+            niri msg action focus-window --id "$wid" >/dev/null 2>&1 || true
+        fi
+    fi
+
+    if [ -n "$yloc" ]; then
+        sleep 0.35
+        setsid sioyek "$path" \
+            --execute-command goto_highlight \
+            --execute-command-data "$yloc" \
+            >/dev/null 2>&1
+    fi
+) &
+disown

@@ -34,6 +34,7 @@ RDEPEND="
 	dev-qt/qtspeech:6
 	dev-qt/qt3d:6
 	media-libs/harfbuzz
+	app-misc/jq
 "
 DEPEND="${RDEPEND}"
 BDEPEND="dev-qt/qttools:6[linguist]"
@@ -71,4 +72,13 @@ src_install() {
 	newicon resources/sioyek-icon-linux.png sioyek.png
 	domenu "${FILESDIR}/sioyek.desktop"
 	doman resources/sioyek.1
+
+	# sioyek:// URL scheme handler. Ships alongside sioyek because the
+	# proxy is meaningless without it — parses sioyek://path?page=N&yloc=Y
+	# URLs (emitted by Zettelkasten card source-links + the vimb
+	# handler-add in /etc/vimb/config) and shells to `sioyek --page N+1`
+	# plus a delayed goto_highlight IPC for precise-Y centering. Uses jq
+	# to talk to niri's window-focus IPC (no-op on other compositors).
+	dobin "${FILESDIR}/sioyek-proto"
+	domenu "${FILESDIR}/sioyek-scheme.desktop"
 }
