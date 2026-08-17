@@ -32,6 +32,10 @@ LICENSE="all-rights-reserved Apache-2.0 BSD-2 MIT"
 SLOT="0"
 KEYWORDS="~arm64"
 
+PATCHES=(
+	"${FILESDIR}"/zeta-0.3.7-root-uri-nil.patch
+)
+
 src_prepare() {
 	default
 	mkdir -p external/_vendor || die

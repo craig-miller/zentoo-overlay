@@ -1,0 +1,49 @@
+--- a/internal/server/lifecycle_handlers.go
++++ b/internal/server/lifecycle_handlers.go
+@@ -35,10 +35,25 @@
+ 	s.config = config
+ 	log.Printf("Config: %v", config)
+ 
+-	// Root
+-	rootUri, _ := url.Parse(*params.RootURI)
++	// Root. Modern LSP clients (nvim >= 0.11) drop the deprecated
++	// RootURI (LSP 3.15+ prefers WorkspaceFolders); dereferencing the
++	// nil pointer here used to panic on startup. Fall back through the
++	// documented root sources in order of preference.
++	var rootPath string
++	switch {
++	case params.RootURI != nil:
++		u, _ := url.Parse(*params.RootURI)
++		rootPath = u.Path
++	case len(params.WorkspaceFolders) > 0:
++		u, _ := url.Parse(params.WorkspaceFolders[0].URI)
++		rootPath = u.Path
++	case params.RootPath != nil:
++		rootPath = *params.RootPath
++	default:
++		return nil, fmt.Errorf("no workspace root provided")
++	}
+ 	resolver.Configure(
+-		rootUri.Path,
++		rootPath,
+ 		config.SelectRegex,
+ 		config.FileExtensions,
+ 		config.DefaultExtension,
+@@ -55,7 +70,7 @@
+ 	}
+ 	hash.Write([]byte(b))
+ 	configHash := hex.EncodeToString(hash.Sum(nil))
+-	cacheDir := path.Join(stateBaseDir, url.PathEscape(rootUri.Path), configHash)
++	cacheDir := path.Join(stateBaseDir, url.PathEscape(rootPath), configHash)
+ 	if err := os.MkdirAll(cacheDir, 0700); err != nil {
+ 		return "", fmt.Errorf("failed to create state directory: %w", err)
+ 	}
+@@ -113,7 +128,7 @@
+ 	}
+ 
+ 	go func() {
+-		scanner.Scan(rootUri.Path, skip, callback)
++		scanner.Scan(rootPath, skip, callback)
+ 		notes := s.cache.GetPaths()
+ 		for _, note := range notes {
+ 			if _, ok := seenNotes[note]; !ok {
