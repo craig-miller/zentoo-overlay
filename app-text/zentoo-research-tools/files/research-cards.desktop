@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=research-cards-daemon
+Exec=sh -c "exec /usr/bin/research-cards-daemon >/dev/null 2>&1"
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

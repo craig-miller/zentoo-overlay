@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<longdescription>
+		Cross-cutting research/PKM tools for zentoo.
+		export-highlights reads sioyek's shared.db + local.db and
+		exports 'f'-color highlights from the current PDF as Typst
+		card files under ~/research/papers/&lt;citekey&gt;/; invoked
+		from sioyek via a new_command binding.
+		research-cards-daemon watches ~/research/papers/**/*.typ and
+		keeps each paper's notes.typ "== Cards" section in sync with
+		the actual card files present, using static-string #link()
+		so the zeta LSP sees the graph edges.
+		research-cards.desktop is an XDG autostart entry launching
+		the daemon at session login via dex or equivalent runner.
+	</longdescription>
+	<upstream>
+		<remote-id type="github">craig-miller/zentoo-overlay</remote-id>
+	</upstream>
+</pkgmetadata>

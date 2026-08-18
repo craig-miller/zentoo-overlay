@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""
+zettel-export — batch-export sioyek 'f'-color highlights from the current
+PDF to Zettelkasten cards under ~/research/papers/<citekey>/.
+
+Invoked from sioyek via:
+    new_command _zettel_export /home/craig/.local/bin/zettel-export \\
+        "%{file_path}" "%{shared_database}" "%{local_database}"
+    _zettel_export <S-z>
+
+Idempotent by UUID marker: highlights already exported into an existing
+card (matched by their sioyek UUID appearing in a `// sioyek:{uuid}` line
+of any card in the folder) are skipped. Only new highlights get new cards
+with the next available <citekey>-note-NNN slug.
+
+Card body matches the locked spec:
+
+    #import "/templates/note.typ": note-template
+    #show: note-template
+
+    = <citekey> - (Quote) - Title <<citekey>-note-NNN>
+
+    <user's note text from sioyek text_annot, or 3 blank lines if absent>
+
+    #quote(attribution: [@<citekey>[p. N]])[flat quote text]
+    // sioyek:{uuid}
+"""
+
+import os
+import re
+import subprocess
+import sqlite3
+import sys
+from pathlib import Path
+
+
+def notify(msg: str) -> None:
+    """Show msg in sioyek's status bar. Best-effort — never fails."""
+    subprocess.run(
+        [
+            "sioyek",
+            "--execute-command",
+            "set_status_string",
+            "--execute-command-data",
+            msg,
+        ],
+        check=False,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
+
+
+def resolve_citekey(pdf_path: Path) -> str | None:
+    """~/research/papers/<citekey>/<file>.pdf → <citekey>."""
+    parts = pdf_path.resolve().parts
+    try:
+        i = parts.index("papers")
+        return parts[i + 1]
+    except (ValueError, IndexError):
+        return None
+
+
+def get_doc_hash(pdf_path: Path, local_db: Path) -> str | None:
+    conn = sqlite3.connect(str(local_db))
+    try:
+        row = conn.execute(
+            "SELECT hash FROM document_hash WHERE path = ?",
+            (str(pdf_path.resolve()),),
+        ).fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def get_f_highlights(shared_db: Path, doc_hash: str) -> list[dict]:
+    conn = sqlite3.connect(str(shared_db))
+    try:
+        rows = conn.execute(
+            """
+            SELECT uuid, desc, text_annot, begin_y
+            FROM highlights
+            WHERE document_path = ? AND type = 'f'
+            ORDER BY begin_y ASC
+            """,
+            (doc_hash,),
+        ).fetchall()
+        return [
+            {"uuid": r[0], "text": r[1] or "", "note": r[2] or "", "begin_y": r[3]}
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+def get_page_heights(pdf_path: Path) -> list[float]:
+    """Per-page heights in PDF points. Index 0 = page 1.
+
+    Uses `mutool pages` which prints one XML block per page with the
+    page's own MediaBox — necessary because `mutool info` collapses
+    identical MediaBoxes across pages into one summary line, so its
+    output can't be mapped 1:1 to pages.
+    """
+    result = subprocess.run(
+        ["mutool", "pages", str(pdf_path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    heights = []
+    # Format: <MediaBox l="0" b="0" r="612" t="792" />
+    for m in re.finditer(
+        r'<MediaBox\s+l="[^"]*"\s+b="([^"]+)"\s+r="[^"]*"\s+t="([^"]+)"',
+        result.stdout,
+    ):
+        heights.append(float(m.group(2)) - float(m.group(1)))
+    return heights
+
+
+def page_for_y(heights: list[float], begin_y: float) -> int:
+    """1-indexed page number containing the absolute y-offset."""
+    y = 0.0
+    for i, h in enumerate(heights, start=1):
+        if y + h >= begin_y:
+            return i
+        y += h
+    return len(heights) or 1
+
+
+def existing_uuids(folder: Path) -> set[str]:
+    """UUIDs already exported into any card in this folder."""
+    marker_re = re.compile(r"//\s*sioyek:\s*(\{[0-9a-f-]+\})")
+    uuids = set()
+    for card in folder.glob("*-note-*.typ"):
+        try:
+            for m in marker_re.finditer(card.read_text()):
+                uuids.add(m.group(1))
+        except OSError:
+            continue
+    return uuids
+
+
+def next_note_number(folder: Path, citekey: str) -> int:
+    pattern = re.compile(rf"^{re.escape(citekey)}-note-(\d+)\.typ$")
+    max_n = 0
+    for entry in folder.iterdir():
+        m = pattern.match(entry.name)
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    return max_n + 1
+
+
+def render_card(
+    citekey: str,
+    slug: str,
+    note: str,
+    quote: str,
+    page: int,
+    begin_y: float,
+    uuid: str,
+    pdf_path: Path,
+) -> str:
+    # Collapse quote whitespace onto one flowing line (PDF hard-wraps
+    # mid-sentence; Typst #quote handles its own wrapping).
+    quote_flat = re.sub(r"\s+", " ", quote).strip()
+    # Body: user's note if present, else two blank lines (which together
+    # with the surrounding blanks give three empty lines between title and
+    # quote for the user to fill in during processing).
+    body = note.strip() if note.strip() else "\n"
+    # The quote itself carries a plain @ref supplement so it stays clean for
+    # copy-paste into external writing. Machine-local click-through goes on
+    # its own line below the UUID marker (rendered as "source" hyperlink,
+    # routed via the sioyek:// URL scheme through ~/.local/bin/sioyek-proto —
+    # the proxy compensates for sioyek's --page off-by-one internally, so
+    # the URL carries the natural display page number).
+    quote_line = (
+        f'#quote(attribution: [@{citekey}[p. {page}]])[{quote_flat}]'
+    )
+    # Absolute path in the URL means the link resolves the same whether the
+    # card is rendered from its folder, from ~/research, or opened
+    # standalone — no dependency on colocation with the PDF. yloc carries
+    # the highlight's absolute document-Y so the proxy's step-2
+    # goto_highlight IPC centers the view on the exact quote instead of
+    # just landing on the right page.
+    link_url = f"sioyek://{pdf_path}?page={page}&yloc={begin_y}"
+    source_line = f'#source-link("{link_url}")'
+    return (
+        f'#import "/templates/note.typ": back-link, highlight-box, note-template, source-link\n'
+        f"#show: note-template\n"
+        f"\n"
+        f"= {citekey} - (Quote) - Title <{slug}>\n"
+        f"\n"
+        f"{body}\n"
+        f"\n"
+        f"#highlight-box[\n"
+        f"  {quote_line}\n"
+        f"  // sioyek:{uuid}\n"
+        f"\n"
+        f"  {source_line}\n"
+        f"]\n"
+        f"\n"
+        f'#back-link("./notes.typ")[← {citekey} notes]\n'
+    )
+
+
+def main() -> int:
+    if len(sys.argv) != 4:
+        print(f"usage: {sys.argv[0]} <pdf> <shared.db> <local.db>", file=sys.stderr)
+        return 2
+
+    pdf_path = Path(sys.argv[1]).resolve()
+    shared_db = Path(sys.argv[2])
+    local_db = Path(sys.argv[3])
+
+    citekey = resolve_citekey(pdf_path)
+    if not citekey:
+        notify("zettel-export: not under ~/research/papers/<citekey>/")
+        return 1
+
+    doc_hash = get_doc_hash(pdf_path, local_db)
+    if not doc_hash:
+        notify(f"zettel-export: no sioyek doc-hash for {pdf_path.name}")
+        return 1
+
+    highlights = get_f_highlights(shared_db, doc_hash)
+    if not highlights:
+        notify(f"zettel-export: no 'f'-color highlights in {citekey}")
+        return 0
+
+    folder = pdf_path.parent
+    seen = existing_uuids(folder)
+    heights = get_page_heights(pdf_path)
+    next_n = next_note_number(folder, citekey)
+
+    written = 0
+    skipped = 0
+    for h in highlights:
+        if h["uuid"] in seen:
+            skipped += 1
+            continue
+        slug = f"{citekey}-note-{next_n:03d}"
+        card = folder / f"{slug}.typ"
+        card.write_text(
+            render_card(
+                citekey=citekey,
+                slug=slug,
+                note=h["note"],
+                quote=h["text"],
+                page=page_for_y(heights, h["begin_y"]),
+                begin_y=h["begin_y"],
+                uuid=h["uuid"],
+                pdf_path=pdf_path,
+            )
+        )
+        written += 1
+        next_n += 1
+
+    notify(
+        f"zettel-export: {citekey} → +{written} new, {skipped} already exported"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

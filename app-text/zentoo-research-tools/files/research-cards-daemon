@@ -1,0 +1,121 @@
+#!/bin/bash
+# research-cards-daemon — keep each paper's notes.typ "== Cards" section in
+# sync with the actual `<citekey>-note-*.typ` files present in the folder.
+#
+# The bullet list lives between literal markers so zeta's tree-sitter query
+# sees each `#link("./<slug>.typ")` as a static string edge (dynamic
+# construction via `read()` + `for` was invisible to zeta and left the graph
+# disconnected):
+#
+#     // AUTO-CARDS BEGIN — managed by research-cards-daemon
+#     - #link("./Rui1999-note-001.typ")[Rui1999-note-001]
+#     - #link("./Rui1999-note-002.typ")[Rui1999-note-002]
+#     // AUTO-CARDS END
+#
+# Content OUTSIDE the markers is preserved untouched — so hand-curated notes
+# stay intact.
+#
+# Started at user-session login via ~/.config/autostart/research-cards.desktop
+# (dex -a picks it up per project_niri_xdg_autostart).
+#
+# On startup: regenerate every folder's cards section (catches offline
+# changes). On any .typ file event under ~/research/papers/: regenerate all
+# folders. Watchexec debounces so a batch export from sioyek `z` (N cards
+# written at once) triggers ONE pass.
+
+set -euo pipefail
+
+RESEARCH_DIR="$HOME/research/papers"
+LOCKFILE="${XDG_RUNTIME_DIR:-/tmp}/research-cards-daemon.pid"
+BEGIN_MARKER='// AUTO-CARDS BEGIN — managed by research-cards-daemon'
+END_MARKER='// AUTO-CARDS END'
+
+# regen_one <dir>: rewrite the AUTO-CARDS block in <dir>/notes.typ from
+# discovered cards. No-op if notes.typ has no markers (skip legacy files) or
+# already matches (avoids inotify-driven write loops).
+regen_one() {
+    local dir="$1"
+    local notes="${dir%/}/notes.typ"
+    [[ -f "$notes" ]] || return 0
+    grep -qF "$BEGIN_MARKER" "$notes" || return 0
+
+    shopt -s nullglob
+    local cards=( "$dir"/*-note-*.typ )
+    local -a slugs=()
+    for c in "${cards[@]}"; do
+        local base="${c##*/}"
+        slugs+=( "${base%.typ}" )
+    done
+    # Deterministic order = deterministic diff = no spurious rewrites.
+    IFS=$'\n' slugs=( $(printf '%s\n' "${slugs[@]}" | sort) )
+    unset IFS
+
+    local body
+    if (( ${#slugs[@]} > 0 )); then
+        body=""
+        for s in "${slugs[@]}"; do
+            body+="- #link(\"./${s}.typ\")[${s}]"$'\n'
+        done
+    else
+        body="// (no cards yet)"$'\n'
+    fi
+
+    local tmp
+    tmp=$(mktemp)
+    awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" -v body="$body" '
+        {
+            if ($0 == begin) {
+                print
+                printf "%s", body
+                inblock = 1
+                next
+            }
+            if (inblock && $0 == end) {
+                print
+                inblock = 0
+                next
+            }
+            if (!inblock) print
+        }
+    ' "$notes" > "$tmp"
+
+    # Only write when content actually changed. Prevents feedback loop
+    # (our own write would re-trigger watchexec).
+    if ! cmp -s "$tmp" "$notes"; then
+        mv "$tmp" "$notes"
+    else
+        rm -f "$tmp"
+    fi
+}
+
+regen_all() {
+    local dir
+    shopt -s nullglob
+    for dir in "$RESEARCH_DIR"/*/; do
+        [[ -d "$dir" ]] || continue
+        regen_one "$dir"
+    done
+}
+
+# --regen-only: called from watchexec on file-change events; regen + exit.
+if [[ "${1:-}" == "--regen-only" ]]; then
+    regen_all
+    exit 0
+fi
+
+# Single-instance guard.
+if [[ -e "$LOCKFILE" ]] && kill -0 "$(cat "$LOCKFILE" 2>/dev/null)" 2>/dev/null; then
+    exit 0
+fi
+echo $$ > "$LOCKFILE"
+trap 'rm -f "$LOCKFILE"' EXIT
+
+regen_all
+
+exec watchexec \
+    --watch "$RESEARCH_DIR" \
+    --exts typ \
+    --debounce 200ms \
+    --no-project-ignore \
+    --no-vcs-ignore \
+    -- "$0" --regen-only
