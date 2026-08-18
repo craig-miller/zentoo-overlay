@@ -1,0 +1,17 @@
+[settings]
+doc-paths-lowercase = False
+default-library = papers
+editor = nvim
+opentool = xdg-open
+
+picktool = fzf
+fzf-header-format.jinja2 = {{ doc.year }}§{{ doc.title }}§{{ doc.author }}§{{ doc.abstract | default("") }}§{%% if not doc.files %%}{{ c.Fore.RED }}{%% endif %%}{{ c.Style.RESET_ALL }} {{ c.Fore.GREEN }}{{ "{:<50.50}".format(doc.author | default("")) }}{{ c.Style.RESET_ALL }}  {{ c.Fore.YELLOW }}{{ "{:<4}".format(doc.year | default("")) }}{{ c.Style.RESET_ALL }}  {{ doc.title }}
+fzf-extra-flags = ['--ansi', '--multi', '-i', '--delimiter', '§', '--with-nth', '5', '--preview', '~/.config/papis/scripts/preview.sh {1} {2} {3} {4}', '--preview-window=up:60%%']
+
+notes-name = notes.typ
+notes-template = ~/.config/papis/notes-template.typ
+ref-format.jinja2 = {{ doc['author_list'][0]['family'] | title }}{{ doc['year'] }}
+add-folder-name = {doc[ref]}
+
+[papers]
+dir = ~/research/papers

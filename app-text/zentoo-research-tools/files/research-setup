@@ -1,0 +1,217 @@
+#!/bin/bash
+# research-setup — bootstrap a working zentoo research PKM installation.
+#
+# Idempotent + non-destructive: safe to run repeatedly. Never overwrites an
+# existing user file. Prints what it did, skipped, and warns about session-
+# level state it can't fix from here (dex not running, missing pass tokens).
+#
+# Usage:
+#   research-setup            do it
+#   research-setup --dry-run  show what would happen; write nothing
+
+set -euo pipefail
+
+SHARE=/usr/share/zentoo-research
+TEMPLATES_SRC=$SHARE/templates
+DEFAULTS_SRC=$SHARE/defaults
+VAULT=${RESEARCH_VAULT:-$HOME/research}
+PAPIS_CFG=${XDG_CONFIG_HOME:-$HOME/.config}/papis
+SIOYEK_CFG=${XDG_CONFIG_HOME:-$HOME/.config}/sioyek
+
+DRY_RUN=0
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run|-n) DRY_RUN=1 ;;
+        --help|-h) sed -n '2,10p' "$0" | sed 's|^# \?||'; exit 0 ;;
+        *) echo "unknown arg: $arg" >&2; exit 2 ;;
+    esac
+done
+
+if [[ -t 1 ]]; then
+    G=$'\e[32m'; Y=$'\e[33m'; DIM=$'\e[2m'; X=$'\e[0m'
+else
+    G= Y= DIM= X=
+fi
+
+n_created=0 n_installed=0 n_skipped=0 n_warned=0
+
+log_did()     { n_created=$((n_created+1));     echo "  ${G}created${X}   $1"; }
+log_install() { n_installed=$((n_installed+1)); echo "  ${G}installed${X} $1"; }
+log_skip()    { n_skipped=$((n_skipped+1));     echo "  ${DIM}skipped${X}   $1"; }
+log_warn()    { n_warned=$((n_warned+1));       echo "  ${Y}warning${X}   $1"; }
+log_would()   {                                 echo "  ${DIM}would${X}     $1"; }
+say()         { echo; echo "== $1 =="; }
+
+check_binary() {
+    local bin=$1 hint=$2
+    if command -v "$bin" >/dev/null 2>&1; then log_skip "$bin present"
+    else log_warn "$bin missing — $hint"
+    fi
+}
+
+ensure_dir() {
+    local d=$1
+    if [[ -d "$d" ]]; then log_skip "dir $d"
+    elif (( DRY_RUN )); then log_would "mkdir -p $d"
+    else mkdir -p "$d"; log_did "dir $d"
+    fi
+}
+
+copy_missing() {
+    local src=$1 dst=$2
+    if [[ -e "$dst" ]]; then log_skip "$dst"
+    elif (( DRY_RUN )); then log_would "install $src → $dst"
+    else install -D -m 0644 "$src" "$dst"; log_did "$dst"
+    fi
+}
+
+write_typst_toml() {
+    local dst=$1
+    if [[ -e "$dst" ]]; then log_skip "$dst"
+    elif (( DRY_RUN )); then log_would "write $dst"
+    else
+        cat > "$dst" <<'EOF'
+# Typst project-root marker for the research vault (papers + notes).
+# Lets tinymist root notes at ~/research so #bibliography("/bib.yml") resolves.
+EOF
+        log_did "$dst"
+    fi
+}
+
+install_uv_tool() {
+    # args: <display> <presence-check name> <uv tool install argv...>
+    # --force overwrites any stale ~/.local/bin/<name> symlink (e.g., left over
+    # from a previous aborted install) that would otherwise block the link step.
+    local display=$1; shift
+    local name=$1; shift
+    if grep -qx "$name" <<<"$uv_tools_installed"; then
+        log_skip "uv tool $display"
+    elif (( DRY_RUN )); then
+        log_would "uv tool install --force $*"
+    else
+        local out
+        if out=$(uv tool install --force "$@" 2>&1); then
+            log_install "uv tool $display"
+        else
+            log_warn "uv tool install $display failed: $(echo "$out" | tail -1)"
+        fi
+    fi
+}
+
+# ============ section 1: deps ============
+say "dependencies"
+check_binary sioyek     "emerge app-text/sioyek"
+check_binary watchexec  "emerge app-misc/watchexec"
+check_binary python3    "emerge dev-lang/python"
+check_binary bash       "emerge app-shells/bash"
+check_binary tinymist   "install via nvim mason or emerge dev-util/tinymist"
+check_binary zeta       "emerge dev-util/zeta"
+check_binary uv         "bootstrap uv (https://docs.astral.sh/uv/)"
+check_binary dex        "emerge x11-misc/dex (or your compositor's autostart-runner)"
+
+# ============ section 2: uv tools ============
+say "uv-managed research tools"
+if command -v uv >/dev/null 2>&1; then
+    uv_tools_installed=$(uv tool list 2>/dev/null | awk '/^[a-z]/ { print $1 }')
+    # jinja2 is optional for papis but required for ref-format.jinja2 templates
+    # (see bundled defaults/papis-config). Both venvs need it: papis at CLI, bib
+    # when it calls papis.commands.add.run in-process.
+    install_uv_tool "papis + papis-scihub + jinja2" papis papis --with papis-scihub --with jinja2
+    install_uv_tool "bib + jinja2"                  bib   "git+https://github.com/craig-miller/bib" --with jinja2
+else
+    log_warn "uv missing — skipping papis / bib install"
+fi
+
+# ============ section 3: vault ============
+say "vault ($VAULT)"
+ensure_dir "$VAULT/papers"
+ensure_dir "$VAULT/notes"
+ensure_dir "$VAULT/templates/csl"
+write_typst_toml "$VAULT/typst.toml"
+copy_missing "$TEMPLATES_SRC/note.typ"                             "$VAULT/templates/note.typ"
+copy_missing "$TEMPLATES_SRC/README.md"                            "$VAULT/templates/README.md"
+copy_missing "$TEMPLATES_SRC/csl/taylor-and-francis-harvard-x.csl" "$VAULT/templates/csl/taylor-and-francis-harvard-x.csl"
+
+# ============ section 4: papis config ============
+say "papis config ($PAPIS_CFG)"
+ensure_dir "$PAPIS_CFG"
+copy_missing "$DEFAULTS_SRC/papis-config"             "$PAPIS_CFG/config"
+copy_missing "$DEFAULTS_SRC/papis-config.py"          "$PAPIS_CFG/config.py"
+copy_missing "$DEFAULTS_SRC/papis-notes-template.typ" "$PAPIS_CFG/notes-template.typ"
+
+# ============ section 5: sioyek prefs + keys ============
+# Idempotent-append via >>. Bash append redirection follows symlinks (writes
+# through to the target file), unlike sed -i which rename()s over the symlink
+# and orphans it. Each line is guarded by a grep marker so a re-run is a
+# no-op — remove the appended line to unbind, next run re-adds it.
+say "sioyek"
+ensure_dir "$SIOYEK_CFG"
+
+append_line_if_missing() {
+    local file=$1 marker=$2 desc=$3 line=$4
+    if [[ -f "$file" ]] && grep -qF "$marker" "$file"; then
+        log_skip "$desc"; return
+    fi
+    if (( DRY_RUN )); then
+        log_would "append to $file — $desc"; return
+    fi
+    {
+        # ensure trailing newline separator before our block
+        [[ -f "$file" && -n "$(tail -c 1 "$file" 2>/dev/null)" ]] && printf '\n'
+        printf '# Added by research-setup\n'
+        printf '%s\n' "$line"
+    } >> "$file"
+    log_did "$file — $desc"
+}
+
+append_line_if_missing "$SIOYEK_CFG/prefs_user.config" \
+    "_export_highlights" \
+    "new_command _export_highlights" \
+    "new_command _export_highlights /usr/bin/export-highlights %{file_path} %{shared_database} %{local_database}"
+
+append_line_if_missing "$SIOYEK_CFG/keys_user.config" \
+    "_export_highlights" \
+    "Z → _export_highlights" \
+    "_export_highlights                                  Z"
+
+append_line_if_missing "$SIOYEK_CFG/keys_user.config" \
+    "add_highlight(f); add_annot_to_selected_highlight" \
+    "H → highlight-f + annotate" \
+    "add_highlight(f); add_annot_to_selected_highlight   H"
+
+echo "  ${DIM}Note: sioyek caches prefs at startup — restart it for changes to load.${X}"
+
+# ============ section 6: daemon ============
+say "research-cards-daemon"
+if pgrep -f /usr/bin/research-cards-daemon >/dev/null 2>&1; then
+    log_skip "daemon already running"
+elif [[ ! -x /usr/bin/research-cards-daemon ]]; then
+    log_warn "/usr/bin/research-cards-daemon missing (reinstall app-text/zentoo-research-tools)"
+elif (( DRY_RUN )); then
+    log_would "start /usr/bin/research-cards-daemon in background"
+else
+    nohup /usr/bin/research-cards-daemon >/dev/null 2>&1 &
+    disown
+    log_did "daemon started (will also auto-start via dex on next session login)"
+fi
+
+# ============ section 7: session-level warnings ============
+say "session"
+if pgrep -x dex >/dev/null 2>&1; then
+    log_skip "dex running (autostart entries active)"
+else
+    log_warn "dex not running — /etc/xdg/autostart/ entries won't fire until dex -a runs (usually from your compositor)"
+fi
+if command -v pass >/dev/null 2>&1 && pass show api/kagi/token >/dev/null 2>&1; then
+    log_skip "kagi API token present (bib fetch Kagi tier enabled)"
+else
+    log_warn "no kagi API token at pass 'api/kagi/token' (optional; bib fetch's Kagi web-search tier will silently skip)"
+fi
+
+# ============ summary ============
+say "summary"
+(( DRY_RUN )) && echo "  ${Y}dry-run:${X} nothing was written."
+echo "  created:   $n_created"
+echo "  installed: $n_installed"
+echo "  skipped:   $n_skipped"
+echo "  warned:    $n_warned"
