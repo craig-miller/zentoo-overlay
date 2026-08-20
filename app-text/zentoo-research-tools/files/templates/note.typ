@@ -1,7 +1,7 @@
 // Shared template for every note in the ~/research vault.
 // Opt in from any note (paper review or grounded/ungrounded card) with:
 //
-//   #import "/templates/note.typ": note-template
+//   #import "/.templates/note.typ": note-template
 //   #show: note-template
 //
 // The template flows the note's body, then appends the paper library's
@@ -10,7 +10,7 @@
 // every note's preview / build output.
 //
 // Citation style: Taylor & Francis Harvard-X (the T&F/IJGIS house style).
-// Other CSLs live in /templates/csl/; swap the path below to change house
+// Other CSLs live in /.templates/csl/; swap the path below to change house
 // style project-wide.
 
 #let note-template(body) = {
@@ -36,7 +36,7 @@
 
   body
   pagebreak(weak: true)
-  bibliography("/bib.yml", style: "/templates/csl/taylor-and-francis-harvard-x.csl")
+  bibliography("/bib.yml", style: "/.templates/csl/taylor-and-francis-harvard-x.csl")
 }
 
 #let highlight-box(body) = block(

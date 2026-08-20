@@ -18,7 +18,7 @@ something here and every note picks it up on the next preview refresh.
 Every note (paper review or card) opens with:
 
 ```typst
-#import "/templates/note.typ": note-template
+#import "/.templates/note.typ": note-template
 #show: note-template
 
 = Note title <label>
@@ -26,8 +26,11 @@ Every note (paper review or card) opens with:
 // ... body ...
 ```
 
-The `/templates/note.typ` path is root-relative — resolved against
-`~/research/typst.toml`, so any depth of nesting works.
+The `/.templates/note.typ` path is root-relative — resolved against
+`~/research/typst.toml`, so any depth of nesting works. The leading
+dot hides `.templates/` from zeta's note-graph scan (zeta skips any
+directory whose relative path starts with `.`), keeping templates
+and CSL files out of the graph while still importable by note.
 
 New paper notes get this preamble automatically from
 `~/.config/papis/notes-template.typ`. New cards get it from
@@ -39,7 +42,7 @@ New paper notes get this preamble automatically from
 Swap the CSL filename in `note.typ`:
 
 ```typst
-bibliography("/bib.yml", style: "/templates/csl/<new-style>.csl")
+bibliography("/bib.yml", style: "/.templates/csl/<new-style>.csl")
 ```
 
 Drop the new `.csl` into `csl/` first (fetch from the CSL styles

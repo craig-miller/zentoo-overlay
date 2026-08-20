@@ -1,4 +1,4 @@
-#import "/templates/note.typ": back-link, highlight-box, note-template, source-link
+#import "/.templates/note.typ": back-link, highlight-box, note-template, source-link
 #show: note-template
 
 = {doc[ref]} - (Notes) {doc[title]} <{doc[ref]}-notes>

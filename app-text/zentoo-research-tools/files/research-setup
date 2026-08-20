@@ -126,11 +126,15 @@ fi
 say "vault ($VAULT)"
 ensure_dir "$VAULT/papers"
 ensure_dir "$VAULT/notes"
-ensure_dir "$VAULT/templates/csl"
+# Vault templates live under a dot-prefixed dir so zeta's note-graph scan
+# skips them (zeta's IngoreDir short-circuits any relative path starting
+# with "."). Bundle source stays as /usr/share/zentoo-research/templates/
+# — dot-prefix is a vault-side concern only.
+ensure_dir "$VAULT/.templates/csl"
 write_typst_toml "$VAULT/typst.toml"
-copy_missing "$TEMPLATES_SRC/note.typ"                             "$VAULT/templates/note.typ"
-copy_missing "$TEMPLATES_SRC/README.md"                            "$VAULT/templates/README.md"
-copy_missing "$TEMPLATES_SRC/csl/taylor-and-francis-harvard-x.csl" "$VAULT/templates/csl/taylor-and-francis-harvard-x.csl"
+copy_missing "$TEMPLATES_SRC/note.typ"                             "$VAULT/.templates/note.typ"
+copy_missing "$TEMPLATES_SRC/README.md"                            "$VAULT/.templates/README.md"
+copy_missing "$TEMPLATES_SRC/csl/taylor-and-francis-harvard-x.csl" "$VAULT/.templates/csl/taylor-and-francis-harvard-x.csl"
 
 # ============ section 4: papis config ============
 say "papis config ($PAPIS_CFG)"
