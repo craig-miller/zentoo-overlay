@@ -3,6 +3,8 @@
 
 EAPI=8
 
+inherit desktop
+
 DESCRIPTION="Research/PKM tools: sioyek->typst highlights + card-list daemon + setup"
 HOMEPAGE="https://github.com/craig-miller/zentoo-overlay"
 S="${WORKDIR}"
@@ -15,6 +17,9 @@ RDEPEND="
 	app-text/sioyek
 	dev-lang/python:*
 	app-shells/bash
+	app-shells/fish
+	app-editors/neovim
+	x11-terms/foot
 	app-misc/watchexec
 "
 
@@ -36,6 +41,9 @@ src_install() {
 	doins "${FILESDIR}"/defaults/papis-config
 	doins "${FILESDIR}"/defaults/papis-config.py
 	doins "${FILESDIR}"/defaults/papis-notes-template.typ
+
+	domenu "${FILESDIR}"/research.desktop
+	domenu "${FILESDIR}"/bib.desktop
 }
 
 pkg_postinst() {

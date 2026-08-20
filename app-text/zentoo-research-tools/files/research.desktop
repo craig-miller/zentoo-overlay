@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Research
+Comment=Open the research vault in nvim
+Exec=foot --app-id=research fish -c 'cd ~/research; exec nvim index.typ'
+Icon=applications-science
+Terminal=false
+Categories=Office;Utility;

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Papers
+Comment=Browse and cite research papers
+Exec=foot --app-id=bib bib
+Icon=applications-office
+Terminal=false
+Categories=Office;Utility;
