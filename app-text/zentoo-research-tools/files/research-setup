@@ -136,6 +136,23 @@ copy_missing "$TEMPLATES_SRC/note.typ"                             "$VAULT/.temp
 copy_missing "$TEMPLATES_SRC/README.md"                            "$VAULT/.templates/README.md"
 copy_missing "$TEMPLATES_SRC/csl/taylor-and-francis-harvard-x.csl" "$VAULT/.templates/csl/taylor-and-francis-harvard-x.csl"
 
+
+# ============ section 3b: launcher ============
+say "launcher"
+LAUNCHER_SRC=$DEFAULTS_SRC/research.desktop.in
+LAUNCHER_DST=${XDG_DATA_HOME:-$HOME/.local/share}/applications/research.desktop
+if [[ ! -f $LAUNCHER_SRC ]]; then
+    log_warn "$LAUNCHER_SRC missing (reinstall app-text/zentoo-research-tools)"
+elif [[ -f $LAUNCHER_DST ]] && cmp -s <(sed "s|@VAULT@|$VAULT|g" "$LAUNCHER_SRC") "$LAUNCHER_DST"; then
+    log_skip "$LAUNCHER_DST"
+elif (( DRY_RUN )); then
+    log_would "render $LAUNCHER_SRC → $LAUNCHER_DST (VAULT=$VAULT)"
+else
+    mkdir -p "$(dirname "$LAUNCHER_DST")"
+    sed "s|@VAULT@|$VAULT|g" "$LAUNCHER_SRC" > "$LAUNCHER_DST"
+    log_install "$LAUNCHER_DST"
+fi
+
 # ============ section 4: papis config ============
 say "papis config ($PAPIS_CFG)"
 ensure_dir "$PAPIS_CFG"
