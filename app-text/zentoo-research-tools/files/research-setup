@@ -146,6 +146,7 @@ fi
 say "vault ($VAULT)"
 ensure_dir "$VAULT/papers"
 ensure_dir "$VAULT/notes"
+ensure_dir "$VAULT/manuscripts"
 # Vault templates live under a dot-prefixed dir so zeta's note-graph scan
 # skips them (zeta's IngoreDir short-circuits any relative path starting
 # with "."). Bundle source stays as /usr/share/zentoo-research/templates/
