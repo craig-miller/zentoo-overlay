@@ -138,19 +138,23 @@ copy_missing "$TEMPLATES_SRC/csl/taylor-and-francis-harvard-x.csl" "$VAULT/.temp
 
 
 # ============ section 3b: launcher ============
+# copy_missing semantics: never overwrites an existing user file. A user
+# who re-runs research-setup with a different RESEARCH_VAULT must first
+# `rm ~/.local/share/applications/research.desktop` for the new path to
+# take effect. Preserves the "never overwrites" contract in the header.
 say "launcher"
 LAUNCHER_SRC=$DEFAULTS_SRC/research.desktop.in
 LAUNCHER_DST=${XDG_DATA_HOME:-$HOME/.local/share}/applications/research.desktop
 if [[ ! -f $LAUNCHER_SRC ]]; then
     log_warn "$LAUNCHER_SRC missing (reinstall app-text/zentoo-research-tools)"
-elif [[ -f $LAUNCHER_DST ]] && cmp -s <(sed "s|@VAULT@|$VAULT|g" "$LAUNCHER_SRC") "$LAUNCHER_DST"; then
+elif [[ -f $LAUNCHER_DST ]]; then
     log_skip "$LAUNCHER_DST"
 elif (( DRY_RUN )); then
     log_would "render $LAUNCHER_SRC → $LAUNCHER_DST (VAULT=$VAULT)"
 else
     mkdir -p "$(dirname "$LAUNCHER_DST")"
     sed "s|@VAULT@|$VAULT|g" "$LAUNCHER_SRC" > "$LAUNCHER_DST"
-    log_install "$LAUNCHER_DST"
+    log_did "$LAUNCHER_DST"
 fi
 
 # ============ section 4: papis config ============

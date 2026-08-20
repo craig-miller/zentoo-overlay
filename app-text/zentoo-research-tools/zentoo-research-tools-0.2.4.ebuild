@@ -19,7 +19,7 @@ RDEPEND="
 	app-shells/bash
 	app-shells/fish
 	app-editors/neovim
-	x11-terms/foot
+	gui-apps/foot
 	app-misc/watchexec
 "
 
