@@ -42,8 +42,7 @@ src_install() {
 	doins "${FILESDIR}"/defaults/papis-config.py
 	doins "${FILESDIR}"/defaults/papis-notes-template.typ
 	doins "${FILESDIR}"/defaults/research.desktop.in
-
-	domenu "${FILESDIR}"/bib.desktop
+	doins "${FILESDIR}"/defaults/bib.desktop.in
 }
 
 pkg_postinst() {

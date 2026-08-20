@@ -65,6 +65,26 @@ copy_missing() {
     fi
 }
 
+# Render a launcher .desktop.in template into ~/.local/share/applications/,
+# applying sed substitutions for placeholders like @VAULT@ / @HOME@. Non-
+# destructive: skip if a file already exists at the destination (aligns with
+# copy_missing). To force a re-render (e.g., after changing RESEARCH_VAULT),
+# rm the destination first.
+render_launcher_missing() {
+    local src=$1 dst=$2 sed_arg=$3
+    if [[ ! -f $src ]]; then
+        log_warn "$src missing (reinstall app-text/zentoo-research-tools)"
+    elif [[ -f $dst ]]; then
+        log_skip "$dst"
+    elif (( DRY_RUN )); then
+        log_would "render $src → $dst"
+    else
+        mkdir -p "$(dirname "$dst")"
+        sed "$sed_arg" "$src" > "$dst"
+        log_did "$dst"
+    fi
+}
+
 write_typst_toml() {
     local dst=$1
     if [[ -e "$dst" ]]; then log_skip "$dst"
@@ -137,25 +157,20 @@ copy_missing "$TEMPLATES_SRC/README.md"                            "$VAULT/.temp
 copy_missing "$TEMPLATES_SRC/csl/taylor-and-francis-harvard-x.csl" "$VAULT/.templates/csl/taylor-and-francis-harvard-x.csl"
 
 
-# ============ section 3b: launcher ============
-# copy_missing semantics: never overwrites an existing user file. A user
-# who re-runs research-setup with a different RESEARCH_VAULT must first
-# `rm ~/.local/share/applications/research.desktop` for the new path to
-# take effect. Preserves the "never overwrites" contract in the header.
-say "launcher"
-LAUNCHER_SRC=$DEFAULTS_SRC/research.desktop.in
-LAUNCHER_DST=${XDG_DATA_HOME:-$HOME/.local/share}/applications/research.desktop
-if [[ ! -f $LAUNCHER_SRC ]]; then
-    log_warn "$LAUNCHER_SRC missing (reinstall app-text/zentoo-research-tools)"
-elif [[ -f $LAUNCHER_DST ]]; then
-    log_skip "$LAUNCHER_DST"
-elif (( DRY_RUN )); then
-    log_would "render $LAUNCHER_SRC → $LAUNCHER_DST (VAULT=$VAULT)"
-else
-    mkdir -p "$(dirname "$LAUNCHER_DST")"
-    sed "s|@VAULT@|$VAULT|g" "$LAUNCHER_SRC" > "$LAUNCHER_DST"
-    log_did "$LAUNCHER_DST"
-fi
+# ============ section 3b: launchers ============
+# Render both user-scope launcher .desktop files. Non-destructive per
+# render_launcher_missing: rm the destination first to force a re-render
+# (e.g., after changing RESEARCH_VAULT or moving ~/.local/bin/bib).
+say "launchers"
+APPS_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/applications
+render_launcher_missing \
+    "$DEFAULTS_SRC/research.desktop.in" \
+    "$APPS_DIR/research.desktop" \
+    "s|@VAULT@|$VAULT|g"
+render_launcher_missing \
+    "$DEFAULTS_SRC/bib.desktop.in" \
+    "$APPS_DIR/bib.desktop" \
+    "s|@HOME@|$HOME|g"
 
 # ============ section 4: papis config ============
 say "papis config ($PAPIS_CFG)"
