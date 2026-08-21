@@ -102,6 +102,40 @@ append_line_if_missing() {
     log_did "$file — $desc"
 }
 
+# Section-aware insert: append_line_if_missing lands at file-end, which for
+# INI-sectioned config (papis) puts the new key under whichever section
+# comes last — usually the wrong one. This helper inserts right after a
+# named anchor line so the new key stays in the correct section. Uses
+# python write_text to follow stow symlinks (unlike sed -i, which rename()s
+# and orphans the link — see feedback_sed_i_breaks_stow_symlinks).
+insert_after_line_if_missing() {
+    local file=$1 anchor=$2 marker=$3 desc=$4 line=$5
+    if [[ -f "$file" ]] && grep -qF "$marker" "$file"; then
+        log_skip "$desc"; return
+    fi
+    if [[ ! -f "$file" ]]; then
+        log_warn "$file missing — cannot insert"; return
+    fi
+    if (( DRY_RUN )); then
+        log_would "insert into $file after anchor — $desc"; return
+    fi
+    python3 - "$file" "$anchor" "$line" <<'PY_INNER'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+anchor, line = sys.argv[2], sys.argv[3]
+lines = p.read_text().splitlines(keepends=True)
+for i, l in enumerate(lines):
+    if anchor in l:
+        lines.insert(i + 1, line + "\n")
+        break
+else:
+    raise SystemExit(f"anchor not found: {anchor}")
+p.write_text("".join(lines))
+PY_INNER
+    log_did "$file — $desc"
+}
+
 write_typst_toml() {
     local dst=$1
     if [[ -e "$dst" ]]; then log_skip "$dst"
@@ -197,10 +231,12 @@ copy_missing "$DEFAULTS_SRC/papis-config"             "$PAPIS_CFG/config"
 copy_missing "$DEFAULTS_SRC/papis-config.py"          "$PAPIS_CFG/config.py"
 copy_missing "$DEFAULTS_SRC/papis-notes-template.typ" "$PAPIS_CFG/notes-template.typ"
 
-# Enforce citekey-cased filenames everywhere. copy_missing above installs the
-# bundled default for fresh users; this append_line_if_missing catches users
-# whose ~/.config/papis/config predates the setting.
-append_line_if_missing "$PAPIS_CFG/config" \
+# Enforce citekey-cased filenames everywhere. copy_missing above installs
+# the bundled default for fresh users; this insert catches users whose
+# ~/.config/papis/config predates the setting. Section-aware (INI): lands
+# in [settings] right after add-folder-name.
+insert_after_line_if_missing "$PAPIS_CFG/config" \
+    "add-folder-name = {doc[ref]}" \
     "add-file-name" \
     "add-file-name = {doc[ref]}" \
     "add-file-name = {doc[ref]}"
