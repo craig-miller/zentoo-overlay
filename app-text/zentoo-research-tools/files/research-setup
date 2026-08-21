@@ -85,6 +85,23 @@ render_launcher_missing() {
     fi
 }
 
+append_line_if_missing() {
+    local file=$1 marker=$2 desc=$3 line=$4
+    if [[ -f "$file" ]] && grep -qF "$marker" "$file"; then
+        log_skip "$desc"; return
+    fi
+    if (( DRY_RUN )); then
+        log_would "append to $file — $desc"; return
+    fi
+    {
+        # ensure trailing newline separator before our block
+        [[ -f "$file" && -n "$(tail -c 1 "$file" 2>/dev/null)" ]] && printf '\n'
+        printf '# Added by research-setup\n'
+        printf '%s\n' "$line"
+    } >> "$file"
+    log_did "$file — $desc"
+}
+
 write_typst_toml() {
     local dst=$1
     if [[ -e "$dst" ]]; then log_skip "$dst"
@@ -180,6 +197,14 @@ copy_missing "$DEFAULTS_SRC/papis-config"             "$PAPIS_CFG/config"
 copy_missing "$DEFAULTS_SRC/papis-config.py"          "$PAPIS_CFG/config.py"
 copy_missing "$DEFAULTS_SRC/papis-notes-template.typ" "$PAPIS_CFG/notes-template.typ"
 
+# Enforce citekey-cased filenames everywhere. copy_missing above installs the
+# bundled default for fresh users; this append_line_if_missing catches users
+# whose ~/.config/papis/config predates the setting.
+append_line_if_missing "$PAPIS_CFG/config" \
+    "add-file-name" \
+    "add-file-name = {doc[ref]}" \
+    "add-file-name = {doc[ref]}"
+
 # ============ section 5: sioyek prefs + keys ============
 # Idempotent-append via >>. Bash append redirection follows symlinks (writes
 # through to the target file), unlike sed -i which rename()s over the symlink
@@ -187,23 +212,6 @@ copy_missing "$DEFAULTS_SRC/papis-notes-template.typ" "$PAPIS_CFG/notes-template
 # no-op — remove the appended line to unbind, next run re-adds it.
 say "sioyek"
 ensure_dir "$SIOYEK_CFG"
-
-append_line_if_missing() {
-    local file=$1 marker=$2 desc=$3 line=$4
-    if [[ -f "$file" ]] && grep -qF "$marker" "$file"; then
-        log_skip "$desc"; return
-    fi
-    if (( DRY_RUN )); then
-        log_would "append to $file — $desc"; return
-    fi
-    {
-        # ensure trailing newline separator before our block
-        [[ -f "$file" && -n "$(tail -c 1 "$file" 2>/dev/null)" ]] && printf '\n'
-        printf '# Added by research-setup\n'
-        printf '%s\n' "$line"
-    } >> "$file"
-    log_did "$file — $desc"
-}
 
 append_line_if_missing "$SIOYEK_CFG/prefs_user.config" \
     "_export_highlights" \

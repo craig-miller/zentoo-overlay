@@ -12,6 +12,7 @@ notes-name = notes.typ
 notes-template = ~/.config/papis/notes-template.typ
 ref-format.jinja2 = {{ doc['author_list'][0]['family'] | title }}{{ doc['year'] }}
 add-folder-name = {doc[ref]}
+add-file-name = {doc[ref]}
 
 [papers]
 dir = ~/research/papers
