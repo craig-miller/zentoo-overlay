@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Agents
+Comment=AI coding agent multiplexer (herdr)
+Exec=foot -T Agents herdr
+Icon=utilities-terminal
+Categories=Development;
+Terminal=false
+StartupNotify=true
