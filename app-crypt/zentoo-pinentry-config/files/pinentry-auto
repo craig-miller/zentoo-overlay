@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+set -eu
+
+# zentoo pinentry dispatcher:
+# - desktop/Wayland sessions use the native GUI pinentry
+# - SSH/TTY/headless sessions fall back to terminal pinentry
+
+if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    case "${WAYLAND_DISPLAY}" in
+        /*) wayland_socket="${WAYLAND_DISPLAY}" ;;
+        *)  wayland_socket="${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ;;
+    esac
+
+    if [ -S "${wayland_socket}" ] && [ -x /usr/bin/pinentry-egui ]; then
+        exec /usr/bin/pinentry-egui "$@"
+    fi
+fi
+
+if [ -x /usr/bin/pinentry-curses ]; then
+    exec /usr/bin/pinentry-curses "$@"
+fi
+
+exec /usr/bin/pinentry-tty "$@"
