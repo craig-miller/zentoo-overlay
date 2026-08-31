@@ -385,6 +385,10 @@ inherit cargo shell-completion
 OSTT_COMMIT="0cd75359bbffde2be5e034bd73019f70f0216792"
 WHISPER_CPP_COMMIT="2eeeba56e9edd762b4b38467bab96c2517163158"
 
+PATCHES=(
+	"${FILESDIR}/${P}-auto-stop-silence.patch"
+)
+
 DESCRIPTION="Terminal-native speech-to-text recorder and transcription tool"
 HOMEPAGE="https://github.com/kristoferlund/ostt https://ostt.ai"
 SRC_URI="

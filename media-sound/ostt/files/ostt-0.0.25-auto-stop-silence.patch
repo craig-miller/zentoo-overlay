@@ -1,0 +1,118 @@
+--- a/src/commands/record.rs
++++ b/src/commands/record.rs
+@@ -381,6 +381,7 @@
+     );
+ 
+     let mut frame_count = 0u64;
++    let mut auto_stop = AutoStopSilence::from_env(actual_sample_rate);
+     loop {
+         if term.load(Ordering::Relaxed) {
+             tracing::debug!("Received SIGUSR1: transcribing via external trigger");
+@@ -402,6 +403,10 @@
+                 tui.render_waveform(&audio_recorder.samples(), audio_recorder.take_true_peak())
+                     .map_err(|e| anyhow::anyhow!(e.to_string()))
+                     .context("failed to render recording waveform")?;
++
++                if auto_stop.should_stop(&audio_recorder.samples(), audio_recorder.is_paused()) {
++                    return Ok(true);
++                }
+             }
+             RecordingCommand::Transcribe => return Ok(true),
+             RecordingCommand::Cancel => return Ok(false),
+@@ -416,6 +421,96 @@
+     }
+ }
+ 
++struct AutoStopSilence {
++    enabled: bool,
++    silence_samples: usize,
++    min_samples: usize,
++    threshold: f32,
++    last_checked_sample: usize,
++    silent_samples: usize,
++    saw_speech: bool,
++}
++
++impl AutoStopSilence {
++    fn from_env(sample_rate: u32) -> Self {
++        let silence_ms = std::env::var("OSTT_AUTO_STOP_SILENCE_MS")
++            .ok()
++            .and_then(|value| value.parse::<u64>().ok())
++            .unwrap_or(0);
++        let min_ms = std::env::var("OSTT_AUTO_STOP_MIN_MS")
++            .ok()
++            .and_then(|value| value.parse::<u64>().ok())
++            .unwrap_or(700);
++        let threshold = std::env::var("OSTT_AUTO_STOP_RMS_THRESHOLD")
++            .ok()
++            .and_then(|value| value.parse::<f32>().ok())
++            .unwrap_or(0.01);
++
++        if silence_ms == 0 || sample_rate == 0 {
++            return Self {
++                enabled: false,
++                silence_samples: 0,
++                min_samples: 0,
++                threshold,
++                last_checked_sample: 0,
++                silent_samples: 0,
++                saw_speech: false,
++            };
++        }
++
++        tracing::info!(
++            "Auto-stop silence enabled: silence={}ms, min={}ms, rms_threshold={}",
++            silence_ms,
++            min_ms,
++            threshold
++        );
++
++        Self {
++            enabled: true,
++            silence_samples: ((sample_rate as u64 * silence_ms) / 1000) as usize,
++            min_samples: ((sample_rate as u64 * min_ms) / 1000) as usize,
++            threshold,
++            last_checked_sample: 0,
++            silent_samples: 0,
++            saw_speech: false,
++        }
++    }
++
++    fn should_stop(&mut self, samples: &[i16], is_paused: bool) -> bool {
++        if !self.enabled || is_paused || samples.len() <= self.last_checked_sample {
++            return false;
++        }
++
++        let new_samples = &samples[self.last_checked_sample..];
++        self.last_checked_sample = samples.len();
++
++        let sum_squares = new_samples
++            .iter()
++            .map(|sample| {
++                let normalized = *sample as f32 / i16::MAX as f32;
++                normalized * normalized
++            })
++            .sum::<f32>();
++        let rms = (sum_squares / new_samples.len() as f32).sqrt();
++
++        if rms >= self.threshold {
++            self.saw_speech = true;
++            self.silent_samples = 0;
++            return false;
++        }
++
++        if self.saw_speech && samples.len() >= self.min_samples {
++            self.silent_samples += new_samples.len();
++            if self.silent_samples >= self.silence_samples {
++                tracing::info!("Auto-stopping recording after silence");
++                return true;
++            }
++        }
++
++        false
++    }
++}
++
+ fn pick_action_id_with_recording_tui(
+     tui: &mut RecordingTui,
+     actions: &[ProcessAction],
