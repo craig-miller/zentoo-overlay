@@ -5,3 +5,5 @@ media-gfx
 media-sound
 net-mail
 x11-themes
+sci-libs
+dev-cpp
