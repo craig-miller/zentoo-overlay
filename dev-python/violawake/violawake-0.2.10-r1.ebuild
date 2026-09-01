@@ -6,13 +6,15 @@ EAPI=8
 DISTUTILS_USE_PEP517=hatchling
 PYTHON_COMPAT=( python3_{12..14} )
 
-inherit pypi distutils-r1
+inherit distutils-r1
 
 DESCRIPTION="Open-source on-device wake word detection SDK and training pipeline"
 HOMEPAGE="
 	https://github.com/GeeIHadAGoodTime/ViolaWake
 	https://pypi.org/project/violawake/
 "
+SRC_URI="https://github.com/GeeIHadAGoodTime/ViolaWake/archive/refs/tags/v${PV}.tar.gz -> ${P}.gh.tar.gz"
+S="${WORKDIR}/ViolaWake-${PV}"
 
 LICENSE="Apache-2.0"
 SLOT="0"
@@ -34,3 +36,7 @@ python_test() {
 	# The PyPI sdist intentionally excludes tests.
 	:
 }
+
+PATCHES=(
+	"${FILESDIR}/${PN}-0.2.10-light-augmentation.patch"
+)

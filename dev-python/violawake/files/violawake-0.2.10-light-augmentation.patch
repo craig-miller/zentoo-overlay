@@ -1,0 +1,122 @@
+diff -uNr violawake-old/src/violawake_sdk/tools/train.py violawake-new/src/violawake_sdk/tools/train.py
+--- violawake-old/src/violawake_sdk/tools/train.py	2026-08-31 20:54:31.186548524 -0700
++++ violawake-new/src/violawake_sdk/tools/train.py	2026-08-31 20:54:31.186548524 -0700
+@@ -1017,13 +1017,19 @@
+     copies_per_clip: int = 21,
+     seed: int = 42,
+ ) -> list[np.ndarray]:
+-    """Augment positive clips with the roadmap audiomentations chain.
++    """Augment positive clips before OWW embedding extraction.
+ 
+-    This operates on raw waveform arrays before OWW embedding extraction and
+-    returns only augmented copies (the originals remain unchanged).
++    Upstream prefers audiomentations here. On source-first Gentoo systems,
++    audiomentations currently drags in librosa/numba/llvmlite for transforms
++    that ViolaWake only needs as generic data augmentation. Keep the upstream
++    path when audiomentations is installed, but provide a lightweight NumPy
++    fallback so wake-word training remains packageable without the numba stack.
+     """
+     import numpy as np
+ 
++    if not raw_audio_arrays:
++        return []
++
+     try:
+         from audiomentations import (
+             Compose,
+@@ -1033,40 +1039,71 @@
+             TimeMask,
+             TimeStretch,
+         )
+-    except ImportError as e:
+-        raise RuntimeError(
+-            "audiomentations is required for positive augmentation. "
+-            "Install with: pip install 'violawake[training]'"
+-        ) from e
+-
+-    if not raw_audio_arrays:
+-        return []
+-
+-    augmenter = Compose(
+-        [
+-            Gain(min_gain_db=-6.0, max_gain_db=6.0, p=0.8),
+-            TimeStretch(min_rate=0.9, max_rate=1.1, p=0.5),
+-            PitchShift(min_semitones=-2.0, max_semitones=2.0, p=0.5),
+-            Mp3Compression(min_bitrate=32, max_bitrate=128, p=0.3),
+-            TimeMask(min_band_part=0.0, max_band_part=0.1, p=0.3),
+-        ],
+-        shuffle=False,
+-    )
++    except ImportError:
++        Compose = Gain = Mp3Compression = PitchShift = TimeMask = TimeStretch = None
+ 
+     augmented: list[np.ndarray] = []
+     rng = np.random.default_rng(seed)
+ 
++    if Compose is not None:
++        augmenter = Compose(
++            [
++                Gain(min_gain_db=-6.0, max_gain_db=6.0, p=0.8),
++                TimeStretch(min_rate=0.9, max_rate=1.1, p=0.5),
++                PitchShift(min_semitones=-2.0, max_semitones=2.0, p=0.5),
++                Mp3Compression(min_bitrate=32, max_bitrate=128, p=0.3),
++                TimeMask(min_band_part=0.0, max_band_part=0.1, p=0.3),
++            ],
++            shuffle=False,
++        )
++        for audio in raw_audio_arrays:
++            base_audio = np.asarray(audio, dtype=np.float32)
++            for _ in range(copies_per_clip):
++                # audiomentations reads numpy's global RNG internally.
++                np.random.seed(int(rng.integers(0, 2**31 - 1)))
++                augmented_audio = augmenter(samples=base_audio.copy(), sample_rate=sample_rate)
++                augmented.append(np.asarray(augmented_audio, dtype=np.float32))
++        return augmented
++
++    def _resample_preserve_length(audio: np.ndarray, rate: float) -> np.ndarray:
++        if audio.size < 2 or abs(rate - 1.0) < 1e-3:
++            return audio.copy()
++        old_x = np.arange(audio.size, dtype=np.float32)
++        new_len = max(2, int(round(audio.size / rate)))
++        new_x = np.linspace(0, audio.size - 1, new_len, dtype=np.float32)
++        stretched = np.interp(new_x, old_x, audio).astype(np.float32)
++        if stretched.size > audio.size:
++            start = (stretched.size - audio.size) // 2
++            return stretched[start : start + audio.size]
++        if stretched.size < audio.size:
++            pad_left = (audio.size - stretched.size) // 2
++            pad_right = audio.size - stretched.size - pad_left
++            return np.pad(stretched, (pad_left, pad_right)).astype(np.float32)
++        return stretched
++
+     for audio in raw_audio_arrays:
+         base_audio = np.asarray(audio, dtype=np.float32)
+         for _ in range(copies_per_clip):
+-            # audiomentations reads numpy's global RNG internally.
+-            np.random.seed(int(rng.integers(0, 2**31 - 1)))
+-            augmented_audio = augmenter(samples=base_audio.copy(), sample_rate=sample_rate)
+-            augmented.append(np.asarray(augmented_audio, dtype=np.float32))
++            out = base_audio.copy()
++            # Random gain in roughly the same range as upstream.
++            out *= float(10 ** (rng.uniform(-6.0, 6.0) / 20.0))
++            # Small timing perturbation; center-crop/pad preserves clip length.
++            if rng.random() < 0.5:
++                out = _resample_preserve_length(out, float(rng.uniform(0.9, 1.1)))
++            # Light Gaussian noise to diversify mic/room conditions.
++            if rng.random() < 0.4:
++                rms = float(np.sqrt(np.mean(out**2))) if out.size else 0.0
++                noise_rms = max(rms * float(rng.uniform(0.005, 0.03)), 1e-5)
++                out = out + rng.normal(0.0, noise_rms, size=out.shape).astype(np.float32)
++            # Time mask a short segment.
++            if rng.random() < 0.3 and out.size > 10:
++                width = max(1, int(out.size * float(rng.uniform(0.02, 0.10))))
++                start = int(rng.integers(0, max(1, out.size - width)))
++                out[start : start + width] = 0.0
++            augmented.append(np.clip(out, -1.0, 1.0).astype(np.float32))
+ 
+     return augmented
+ 
+-
+ def _prepare_audio_for_oww(
+     audio: np.ndarray,
+     *,
