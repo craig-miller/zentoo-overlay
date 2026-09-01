@@ -1,0 +1,9 @@
+diff -uNr pytorch-patch-old/c10/CMakeLists.txt pytorch-patch-new/c10/CMakeLists.txt
+--- pytorch-patch-old/c10/CMakeLists.txt	2026-08-31 21:07:09.997544025 -0700
++++ pytorch-patch-new/c10/CMakeLists.txt	2026-08-31 21:07:09.997571066 -0700
+@@ -1,4 +1,4 @@
+-  if(USE_MIMALLOC)
++  if(USE_MIMALLOC AND TARGET mimalloc-static)
+     target_link_libraries(c10 PRIVATE "mimalloc-static")
+     add_dependencies(c10 mimalloc-static)
+   endif()
