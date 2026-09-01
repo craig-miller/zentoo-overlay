@@ -19,6 +19,11 @@ KEYWORDS="~amd64 ~arm64"
 IUSE="test"
 RESTRICT="!test? ( test )"
 
+RDEPEND="
+	$(python_gen_cond_dep '
+		dev-python/audioop-lts[${PYTHON_USEDEP}]
+	' python3_{13..14})
+"
 BDEPEND="
 	test? (
 		media-video/ffmpeg[lame,vorbis]
