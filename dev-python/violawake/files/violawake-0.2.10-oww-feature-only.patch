@@ -1,0 +1,65 @@
+--- a/src/violawake_sdk/tools/train.py	2026-09-01 17:56:50.450784511 -0700
++++ b/src/violawake_sdk/tools/train.py	2026-09-01 17:56:50.509312291 -0700
+@@ -70,6 +70,26 @@
+     """Raised when programmatic training cannot continue safely."""
+ 
+ 
++def _create_oww_backbone_model(OWWModel):
++    """Create an OpenWakeWord model for feature extraction only.
++
++    ViolaWake training uses OpenWakeWord's shared audio preprocessor/backbone to
++    extract embeddings; it does not need OpenWakeWord's bundled pretrained wake
++    classifiers. Gentoo's source package ships the ONNX feature models but not
++    the optional pretrained classifier blobs, so prevent openWakeWord from
++    auto-loading every default wake model.
++    """
++
++    import openwakeword
++
++    saved_models = openwakeword.MODELS
++    try:
++        openwakeword.MODELS = {}
++        return OWWModel(wakeword_models=[], inference_framework="onnx")
++    finally:
++        openwakeword.MODELS = saved_models
++
++
+ class ModelQualityGateError(TrainingError):
+     """Raised when a freshly trained model fails the deployment quality gate
+     (grade F) and ONNX export is blocked.
+@@ -1383,7 +1403,7 @@
+     # present, but the bundled tflite_runtime in our backend image rejects the
+     # current openwakeword .tflite schema with "Could not open ...". ONNX path
+     # is the canonical production target anyway.
+-    oww = OWWModel(inference_framework="onnx")
++    oww = _create_oww_backbone_model(OWWModel)
+     preprocessor = oww.preprocessor
+ 
+     all_embeddings: list[np.ndarray] = []
+@@ -1460,7 +1480,7 @@
+     except ImportError as e:
+         raise TrainingError(f"openwakeword required: {e}") from e
+ 
+-    oww = OWWModel(inference_framework="onnx")
++    oww = _create_oww_backbone_model(OWWModel)
+     preprocessor = oww.preprocessor
+ 
+     all_embeddings: list[np.ndarray] = []
+@@ -1534,7 +1554,7 @@
+         print(f"ERROR: openwakeword required: {e}", file=sys.stderr)
+         sys.exit(1)
+ 
+-    oww = OWWModel(inference_framework="onnx")
++    oww = _create_oww_backbone_model(OWWModel)
+     preprocessor = oww.preprocessor
+ 
+     all_embeddings: list[np.ndarray] = []
+@@ -2769,7 +2789,7 @@
+     if verbose:
+         print("Loading OpenWakeWord backbone...")
+ 
+-    oww = OWWModel(inference_framework="onnx")
++    oww = _create_oww_backbone_model(OWWModel)
+     preprocessor = oww.preprocessor
+ 
+     def _audio_to_embedding(audio_f32):
