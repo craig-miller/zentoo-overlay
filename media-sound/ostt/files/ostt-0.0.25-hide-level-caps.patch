@@ -1,0 +1,11 @@
+--- a/src/recording/tui.rs
++++ b/src/recording/tui.rs
+@@ -258,7 +258,7 @@ impl RecordingTui {
+         };
+ 
+         // Peak caps: hold each column's recent maximum and let it sink slowly
+-        let show_caps = self.visualization_type == VisualizationType::Spectrum;
++        let show_caps = false;
+         if show_caps {
+             if self.peak_caps.len() != render_data.len() {
+                 self.peak_caps = vec![0.0; render_data.len()];
