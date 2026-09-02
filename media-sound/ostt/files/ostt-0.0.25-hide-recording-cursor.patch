@@ -1,0 +1,25 @@
+--- a/src/recording/tui.rs
++++ b/src/recording/tui.rs
+@@ -111,7 +111,11 @@ impl RecordingTui {
+     pub fn new(config: &OsttConfig, sample_rate: u32) -> Result<Self, Box<dyn Error>> {
+         enable_raw_mode()?;
+         let mut stdout = stdout();
+-        execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
++        execute!(
++            stdout,
++            crossterm::terminal::EnterAlternateScreen,
++            crossterm::cursor::Hide
++        )?;
+ 
+         let backend = CrosstermBackend::new(stdout);
+         let terminal = Terminal::new(backend)?;
+@@ -669,7 +673,8 @@ impl RecordingTui {
+         disable_raw_mode()?;
+         execute!(
+             self.terminal.backend_mut(),
+-            crossterm::terminal::LeaveAlternateScreen
++            crossterm::terminal::LeaveAlternateScreen,
++            crossterm::cursor::Show
+         )?;
+         self.terminal.show_cursor()?;
+         Ok(())
