@@ -96,8 +96,8 @@
 +                frame,
 +                bottom_area,
 +                &render_data,
-+                Color::Rgb(0, 0, 0),
 +                mirror_bg,
++                Color::Rgb(0, 0, 0),
 +                true,
 +            );
  
