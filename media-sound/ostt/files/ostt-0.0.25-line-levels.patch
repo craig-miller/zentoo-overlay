@@ -1,0 +1,105 @@
+--- a/src/recording/tui.rs	2026-09-02 11:47:20.943507915 -0700
++++ b/src/recording/tui.rs	2026-09-02 11:47:20.943563666 -0700
+@@ -11,7 +11,7 @@
+ use ratatui::{
+     prelude::*,
+     style::{Color, Style},
+-    widgets::{ListState, Paragraph, Sparkline, Wrap},
++    widgets::{ListState, Paragraph, Wrap},
+ };
+ use std::error::Error;
+ use std::io::{stdout, Stdout};
+@@ -50,6 +50,46 @@
+ /// signal is present but below the current reference.
+ const ADAPTIVE_REF_RELEASE_PER_FRAME: f32 = 0.025;
+ 
++fn render_level_lines(frame: &mut Frame, area: Rect, data: &[u64], fg: Color, bg: Color, mirror_down: bool) {
++    if area.width == 0 || area.height == 0 {
++        return;
++    }
++
++    let buf = frame.buffer_mut();
++    for y in area.y..area.y + area.height {
++        for x in area.x..area.x + area.width {
++            buf.set_string(x, y, " ", Style::default().bg(bg));
++        }
++    }
++
++    let height = area.height as u64;
++    for (idx, value) in data.iter().enumerate() {
++        if idx >= area.width as usize {
++            break;
++        }
++        let level = (*value).min(100);
++        if level == 0 {
++            continue;
++        }
++        let active_rows = ((level * height) + 99) / 100;
++        let x = area.x + idx as u16;
++        if mirror_down {
++            for offset in 0..active_rows as u16 {
++                buf.set_string(x, area.y + offset, "│", Style::default().fg(fg).bg(bg));
++            }
++        } else {
++            for offset in 0..active_rows as u16 {
++                buf.set_string(
++                    x,
++                    area.y + area.height - 1 - offset,
++                    "│",
++                    Style::default().fg(fg).bg(bg),
++                );
++            }
++        }
++    }
++}
++
+ /// User input command during recording.
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum RecordingCommand {
+@@ -320,12 +360,14 @@
+                 height: top_area_height,
+             };
+ 
+-            let top_sparkline = Sparkline::default()
+-                .data(&render_data)
+-                .max(100)
+-                .style(Style::default().bg(Color::Rgb(0, 0, 0)).fg(viz_fg));
+-
+-            frame.render_widget(top_sparkline, top_area);
++            render_level_lines(
++                frame,
++                top_area,
++                &render_data,
++                viz_fg,
++                Color::Rgb(0, 0, 0),
++                false,
++            );
+ 
+             // Peak caps: a thin marker resting just above each column's bar
+             if show_caps {
+@@ -359,17 +401,14 @@
+                 height: content_area.height.saturating_sub(top_area_height),
+             };
+ 
+-            let inverted_data: Vec<u64> = render_data
+-                .iter()
+-                .map(|&v| 100_u64.saturating_sub(v))
+-                .collect();
+-
+-            let bottom_sparkline = Sparkline::default()
+-                .data(&inverted_data)
+-                .max(100)
+-                .style(Style::default().bg(mirror_bg).fg(Color::Rgb(0, 0, 0)));
+-
+-            frame.render_widget(bottom_sparkline, bottom_area);
++            render_level_lines(
++                frame,
++                bottom_area,
++                &render_data,
++                Color::Rgb(0, 0, 0),
++                mirror_bg,
++                true,
++            );
+ 
+             let footer_area = Rect {
+                 x: padded_area.x,
