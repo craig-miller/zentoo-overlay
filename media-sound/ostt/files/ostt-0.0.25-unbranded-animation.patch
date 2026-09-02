@@ -1,5 +1,5 @@
---- a/src/transcription/animation.rs	2026-09-02 11:26:08.290110097 -0700
-+++ b/src/transcription/animation.rs	2026-09-02 11:26:08.290148222 -0700
+--- a/src/transcription/animation.rs	2026-09-02 11:27:48.934805539 -0700
++++ b/src/transcription/animation.rs	2026-09-02 11:27:48.934841748 -0700
 @@ -1,24 +1,10 @@
 -//! Animated logo loader for transcription phase.
 -//!
@@ -27,7 +27,7 @@
      start_time: Instant,
      min_duration: std::time::Duration,
      frame_count: u32,
-@@ -26,11 +12,9 @@
+@@ -26,59 +12,19 @@
  }
  
  impl TranscriptionAnimation {
@@ -40,10 +40,16 @@
              start_time: Instant::now(),
              min_duration: std::time::Duration::from_secs(5),
              frame_count: 0,
-@@ -43,44 +27,6 @@
-         self.status_label = label.to_string();
+-            status_label: "Transcribing...".to_string(),
++            status_label: "Transcribing".to_string(),
+         }
      }
  
+     /// Sets the status label displayed below the animation.
+     pub fn set_status_label(&mut self, label: &str) {
+-        self.status_label = label.to_string();
+-    }
+-
 -    /// Initialize ASCII art characters for the animation
 -    fn init_chars(&mut self) {
 -        self.chars.clear();
@@ -80,11 +86,10 @@
 -        ];
 -
 -        self.chars = ascii_chars.to_vec();
--    }
--
++        self.status_label = label.trim_end_matches('.').to_string();
+     }
+ 
      /// Returns true if the animation minimum duration has not elapsed.
-     pub fn is_running(&self) -> bool {
-         self.start_time.elapsed() < self.min_duration
 @@ -96,83 +42,12 @@
          self.frame_count = self.frame_count.wrapping_add(1);
      }
