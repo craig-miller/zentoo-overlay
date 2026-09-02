@@ -1,0 +1,79 @@
+--- a/src/recording/tui.rs	2026-09-02 11:29:44.028010549 -0700
++++ b/src/recording/tui.rs	2026-09-02 11:29:44.028061507 -0700
+@@ -97,6 +97,8 @@
+     /// Per-column peak cap positions (spectrum mode), sinking slowly over time
+     peak_caps: Vec<f32>,
+     cleaned_up: bool,
++    /// Optional voice/wake context label shown on the bottom row.
++    context_label: String,
+ }
+ 
+ impl RecordingTui {
+@@ -149,6 +151,7 @@
+             spectrum_analyzer,
+             peak_caps: Vec::new(),
+             cleaned_up: false,
++            context_label: std::env::var("OSTT_CONTEXT_LABEL").unwrap_or_default(),
+         })
+     }
+ 
+@@ -406,6 +409,22 @@
+                 .style(footer_style);
+ 
+             frame.render_widget(footer, footer_area);
++
++            if !self.context_label.is_empty() {
++                let label_width = self.context_label.chars().count() as u16;
++                if label_width < footer_area.width {
++                    let label_x = footer_area
++                        .x
++                        .saturating_add(footer_area.width / 2)
++                        .saturating_sub(label_width / 2);
++                    frame.buffer_mut().set_string(
++                        label_x,
++                        footer_area.y,
++                        &self.context_label,
++                        footer_style,
++                    );
++                }
++            }
+         })?;
+ 
+         Ok(())
+--- a/src/transcription/animation.rs	2026-09-02 11:29:44.041536898 -0700
++++ b/src/transcription/animation.rs	2026-09-02 11:29:44.041569106 -0700
+@@ -9,6 +9,7 @@
+     min_duration: std::time::Duration,
+     frame_count: u32,
+     status_label: String,
++    context_label: String,
+ }
+ 
+ impl TranscriptionAnimation {
+@@ -19,6 +20,7 @@
+             min_duration: std::time::Duration::from_secs(5),
+             frame_count: 0,
+             status_label: "Transcribing".to_string(),
++            context_label: std::env::var("OSTT_CONTEXT_LABEL").unwrap_or_default(),
+         }
+     }
+ 
+@@ -86,5 +88,18 @@
+                 Style::default().fg(Color::DarkGray),
+             );
+         }
++
++        if !self.context_label.is_empty() && height > 0 {
++            let context_width = self.context_label.chars().count() as u16;
++            if context_width < width {
++                let context_x = (width / 2).saturating_sub(context_width / 2);
++                frame.buffer_mut().set_string(
++                    area.x + context_x,
++                    area.y + height.saturating_sub(1),
++                    &self.context_label,
++                    Style::default().fg(Color::DarkGray),
++                );
++            }
++        }
+     }
+ }
