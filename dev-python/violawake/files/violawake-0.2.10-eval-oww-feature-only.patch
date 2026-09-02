@@ -1,0 +1,46 @@
+--- a/src/violawake_sdk/training/evaluate.py	2026-09-01 18:42:05.873274312 -0700
++++ b/src/violawake_sdk/training/evaluate.py	2026-09-01 18:42:05.905491667 -0700
+@@ -19,6 +19,25 @@
+ 
+ logger = logging.getLogger(__name__)
+ 
++
++def _create_oww_backbone_model(OWWModel):
++    """Create an OpenWakeWord model for feature extraction only.
++
++    Evaluation only needs OpenWakeWord's shared preprocessor/backbone to extract
++    embeddings for the trained ViolaWake model. Gentoo's package ships the ONNX
++    feature models, but not optional bundled pretrained wake classifiers such as
++    alexa_v0.1.onnx, so prevent openWakeWord from auto-loading them.
++    """
++
++    import openwakeword
++
++    saved_models = openwakeword.MODELS
++    try:
++        openwakeword.MODELS = {}
++        return OWWModel(wakeword_models=[], inference_framework="onnx")
++    finally:
++        openwakeword.MODELS = saved_models
++
+ _OWW_EMBEDDING_DIM = 96
+ _DEFAULT_TEMPORAL_SEQ_LEN = 9
+ 
+@@ -261,7 +280,7 @@
+     from violawake_sdk._constants import CLIP_SAMPLES
+     from violawake_sdk.audio import center_crop, load_audio
+ 
+-    oww = OWWModel(inference_framework="onnx")
++    oww = _create_oww_backbone_model(OWWModel)
+     preprocessor = oww.preprocessor
+     if not hasattr(preprocessor, "onnx_execution_provider"):
+         preprocessor.onnx_execution_provider = "CPUExecutionProvider"
+@@ -324,7 +343,7 @@
+     from violawake_sdk._constants import CLIP_SAMPLES
+     from violawake_sdk.audio import center_crop, load_audio
+ 
+-    oww = OWWModel(inference_framework="onnx")
++    oww = _create_oww_backbone_model(OWWModel)
+     preprocessor = oww.preprocessor
+     if not hasattr(preprocessor, "onnx_execution_provider"):
+         preprocessor.onnx_execution_provider = "CPUExecutionProvider"
