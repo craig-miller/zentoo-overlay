@@ -1,0 +1,30 @@
+--- a/src/process/bash.rs
++++ b/src/process/bash.rs
+@@ -20,7 +20,12 @@ pub async fn execute_bash_action(command: &str, input: &str) -> anyhow::Result<S
+     use tokio::process::Command;
+     use tokio::time::timeout;
+ 
+-    const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
++    let timeout_secs = std::env::var("OSTT_BASH_ACTION_TIMEOUT_SECS")
++        .ok()
++        .and_then(|value| value.parse::<u64>().ok())
++        .filter(|value| *value > 0)
++        .unwrap_or(30);
++    let command_timeout = Duration::from_secs(timeout_secs);
+ 
+     tracing::debug!("Executing bash command: {}", command);
+ 
+@@ -44,12 +49,12 @@ pub async fn execute_bash_action(command: &str, input: &str) -> anyhow::Result<S
+     drop(stdin);
+ 
+     // Wait for the child to complete with timeout
+-    let output = timeout(COMMAND_TIMEOUT, child.wait_with_output())
++    let output = timeout(command_timeout, child.wait_with_output())
+         .await
+         .map_err(|_| {
+-            tracing::error!("Bash command timed out after 30 seconds: {}", command);
+-            anyhow::anyhow!("Command timed out after 30 seconds")
++            tracing::error!("Bash command timed out after {} seconds: {}", timeout_secs, command);
++            anyhow::anyhow!("Command timed out after {} seconds", timeout_secs)
+         })?
+         .map_err(|e| anyhow::anyhow!("Failed to wait for command: {e}"))?;
