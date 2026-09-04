@@ -15,6 +15,7 @@ S="${WORKDIR}/noctalia-${MY_COMMIT}"
 
 LICENSE="MIT"
 SLOT="0"
+KEYWORDS="~arm64"
 
 IUSE="+jemalloc"
 

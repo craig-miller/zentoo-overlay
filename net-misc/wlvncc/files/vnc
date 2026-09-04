@@ -1,0 +1,25 @@
+#!/bin/sh
+# vnc — choose a saved VNC host from pass using Noctalia dmenu, then launch
+# wlvncc with zentoo's Wayland-native macOS-friendly defaults.
+
+set -eu
+
+store="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
+vnc_store="$store/vnc"
+
+if [ ! -d "$vnc_store" ]; then
+  noctalia msg notification-show "Remote Desktop -- No VNC hosts found in pass under vnc/" >/dev/null 2>&1 || true
+  exit 0
+fi
+
+host="$(
+  find "$vnc_store" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; |
+  sort |
+  noctalia dmenu -p "Remote desktop"
+)"
+
+[ -n "$host" ] || exit 0
+
+exec wlvncc -a zentoo-vnc -d -i -e copyrect,raw \
+  -A "pass show vnc/$host/username; pass show vnc/$host/password" \
+  "$host"

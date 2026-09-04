@@ -1,0 +1,44 @@
+# Copyright 2025 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+COMMIT="cc0abf87c37920540f2439a556e6a480c28f8f46"
+
+inherit desktop meson
+
+DESCRIPTION="A Wayland Native VNC Client"
+HOMEPAGE="https://github.com/any1/wlvncc"
+SRC_URI="https://github.com/any1/wlvncc/archive/${COMMIT}.tar.gz -> ${P}.gh.tar.gz"
+S="${WORKDIR}/${PN}-${COMMIT}"
+
+LICENSE="GPL-2"
+SLOT="0"
+KEYWORDS="~arm64"
+IUSE="video_cards_nvidia"
+
+PATCHES=(
+	"${FILESDIR}/${P}-ctrl-i-shortcut-inhibit-toggle.patch"
+)
+
+DEPEND="
+	dev-libs/lzo
+	dev-libs/wayland-protocols
+	x11-libs/libdrm
+	media-video/ffmpeg
+"
+RDEPEND="
+	dev-libs/aml:0/1
+	x11-libs/libxkbcommon
+	x11-libs/pixman
+	dev-libs/wayland
+	app-admin/pass
+	gui-apps/noctalia-shell
+	video_cards_nvidia? ( gui-libs/egl-gbm )
+	!video_cards_nvidia? ( media-libs/mesa )
+"
+
+src_install() {
+	meson_src_install
+	dobin "${FILESDIR}"/vnc
+	domenu "${FILESDIR}"/vnc.desktop
+}

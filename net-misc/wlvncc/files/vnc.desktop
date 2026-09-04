@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Remote Desktop
+Comment=Choose a saved VNC host
+Exec=vnc
+Icon=preferences-desktop-remote-desktop
+Terminal=false
+Categories=Network;RemoteAccess;
