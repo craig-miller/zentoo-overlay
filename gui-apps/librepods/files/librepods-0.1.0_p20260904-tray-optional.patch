@@ -1,0 +1,197 @@
+From: Craig Miller <craig@localhost>
+Date: Thu, 4 Sep 2026 02:05:00 +0000
+Subject: [PATCH] Make LibrePods desktop-safe for AirPods Max on Niri
+
+Retry StatusNotifier tray startup so LibrePods can register if it starts
+before Noctalia's watcher is ready.
+
+Also disable MPRIS/media-session automation only for AirPods Max models.
+AirPods Max can report ear/ownership states that do not map cleanly to
+LibrePods' earbud-oriented media automation, causing desktop media to be
+paused even while the headphones are being worn. Keep the upstream media
+automation path for other AirPods models.
+---
+diff --git a/src/devices/airpods.rs b/src/devices/airpods.rs
+index f0e876c..ff639e5 100644
+--- a/src/devices/airpods.rs
++++ b/src/devices/airpods.rs
+@@ -1,4 +1,5 @@
+ use crate::bluetooth::aacp::ControlCommandIdentifiers;
++use crate::devices::enums::DeviceInformation;
+ use crate::bluetooth::aacp::{AACPEvent, AACPManager, AirPodsLEKeys, ProximityKeyType};
+ use crate::media_controller::MediaController;
+ use crate::ui::messages::BluetoothUIMessage;
+@@ -118,6 +119,20 @@ impl AirPodsDevice {
+             .expect("Failed to get adapter address")
+             .to_string();
+ 
++        let is_airpods_max = {
++            let state = aacp_manager.state.lock().await;
++            state
++                .devices
++                .get(&mac_address.to_string())
++                .and_then(|device| device.information.as_ref())
++                .and_then(|info| match info {
++                    DeviceInformation::AirPods(info) => Some(info.model_number.as_str()),
++                    _ => None,
++                })
++                .map(|model| matches!(model, "A2096" | "A3183" | "A3184"))
++                .unwrap_or(false)
++        };
++
+         let media_controller = Arc::new(Mutex::new(MediaController::new(
+             mac_address.to_string(),
+             local_mac.clone(),
+@@ -142,12 +157,16 @@ impl AirPodsDevice {
+             }
+         });
+ 
+-        let mc_listener = media_controller.lock().await;
+-        let aacp_manager_clone_listener = aacp_manager.clone();
+-        mc_listener
+-            .start_playback_listener(aacp_manager_clone_listener, command_tx.clone())
+-            .await;
+-        drop(mc_listener);
++        if is_airpods_max {
++            info!("AirPods Max detected; disabling LibrePods MPRIS playback automation");
++        } else {
++            let mc_listener = media_controller.lock().await;
++            let aacp_manager_clone_listener = aacp_manager.clone();
++            mc_listener
++                .start_playback_listener(aacp_manager_clone_listener, command_tx.clone())
++                .await;
++            drop(mc_listener);
++        }
+ 
+         let (listening_mode_tx, mut listening_mode_rx) = tokio::sync::mpsc::unbounded_channel();
+         aacp_manager
+@@ -215,14 +234,19 @@ impl AirPodsDevice {
+             )
+             .await;
+         let mc_clone_owns = media_controller.clone();
++        let is_airpods_max_owns = is_airpods_max;
+         tokio::spawn(async move {
+             while let Some(value) = owns_connection_rx.recv().await {
+                 let owns = value.first().copied().unwrap_or(0) != 0;
+                 if !owns {
+-                    info!("Lost ownership, pausing media and disconnecting audio");
+-                    let controller = mc_clone_owns.lock().await;
+-                    controller.pause_all_media().await;
+-                    controller.deactivate_a2dp_profile().await;
++                    if is_airpods_max_owns {
++                        info!("AirPods Max lost ownership; leaving playback alone");
++                    } else {
++                        info!("Lost ownership, pausing media and disconnecting audio");
++                        let controller = mc_clone_owns.lock().await;
++                        controller.pause_all_media().await;
++                        controller.deactivate_a2dp_profile().await;
++                    }
+                 }
+             }
+         });
+@@ -240,14 +264,21 @@ impl AirPodsDevice {
+                             "Received EarDetection event: old_status={:?}, new_status={:?}",
+                             old_status, new_status
+                         );
+-                        let controller = mc_clone.lock().await;
+-                        debug!(
+-                            "Calling handle_ear_detection with old_status: {:?}, new_status: {:?}",
+-                            old_status, new_status
+-                        );
+-                        controller
+-                            .handle_ear_detection(old_status, new_status)
+-                            .await;
++                        if is_airpods_max {
++                            debug!(
++                                "AirPods Max detected; ignoring ear detection media action old_status: {:?}, new_status: {:?}",
++                                old_status, new_status
++                            );
++                        } else {
++                            let controller = mc_clone.lock().await;
++                            debug!(
++                                "Calling handle_ear_detection with old_status: {:?}, new_status: {:?}",
++                                old_status, new_status
++                            );
++                            controller
++                                .handle_ear_detection(old_status, new_status)
++                                .await;
++                        }
+                     }
+                     AACPEvent::BatteryInfo(battery_info) => {
+                         debug!("Received BatteryInfo event: {:?}", battery_info);
+diff --git a/src/main.rs b/src/main.rs
+index f43f575..841a083 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -24,6 +24,7 @@ use std::collections::HashMap;
+ use std::env;
+ use std::sync::atomic::{AtomicBool};
+ use std::sync::Arc;
++use tokio::time::{sleep, Duration};
+ use tokio::sync::RwLock;
+ use tokio::sync::mpsc::unbounded_channel;
+ 
+@@ -129,24 +130,45 @@ async fn async_main(
+     let tray_handle = if args.no_tray {
+         None
+     } else {
+-        let tray = MyTray {
+-            conversation_detect_enabled: None,
+-            battery_headphone: None,
+-            battery_headphone_status: None,
+-            battery_l: None,
+-            battery_l_status: None,
+-            battery_r: None,
+-            battery_r_status: None,
+-            battery_c: None,
+-            battery_c_status: None,
+-            connected: false,
+-            listening_mode: None,
+-            allow_off_option: None,
+-            command_tx: None,
+-            ui_tx: Some(ui_tx.clone()),
+-        };
+-        let handle = tray.spawn().await.unwrap();
+-        Some(handle)
++        let mut handle = None;
++        for attempt in 1..=30 {
++            let tray = MyTray {
++                conversation_detect_enabled: None,
++                battery_headphone: None,
++                battery_headphone_status: None,
++                battery_l: None,
++                battery_l_status: None,
++                battery_r: None,
++                battery_r_status: None,
++                battery_c: None,
++                battery_c_status: None,
++                connected: false,
++                listening_mode: None,
++                allow_off_option: None,
++                command_tx: None,
++                ui_tx: Some(ui_tx.clone()),
++            };
++            match tray.spawn().await {
++                Ok(tray_handle) => {
++                    handle = Some(tray_handle);
++                    break;
++                }
++                Err(e) if attempt < 30 => {
++                    warn!(
++                        "Failed to spawn system tray/status notifier (attempt {}/30), retrying: {}",
++                        attempt, e
++                    );
++                    sleep(Duration::from_secs(1)).await;
++                }
++                Err(e) => {
++                    warn!(
++                        "Failed to spawn system tray/status notifier after 30 attempts; continuing without tray: {}",
++                        e
++                    );
++                }
++            }
++        }
++        handle
+     };
+ 
+     let session = bluer::Session::new().await?;
