@@ -1,15 +1,8 @@
-From: Craig Miller <craig@localhost>
-Date: Thu, 4 Sep 2026 02:05:00 +0000
 Subject: [PATCH] Make LibrePods desktop-safe for AirPods Max on Niri
 
-Retry StatusNotifier tray startup so LibrePods can register if it starts
-before Noctalia's watcher is ready.
-
-Also disable MPRIS/media-session automation only for AirPods Max models.
-AirPods Max can report ear/ownership states that do not map cleanly to
-LibrePods' earbud-oriented media automation, causing desktop media to be
-paused even while the headphones are being worn. Keep the upstream media
-automation path for other AirPods models.
+Retry tray startup, disable AirPods Max MPRIS automation, show the AirPods
+Max battery as a single status-icon + percentage, label it as AirPods Max,
+and keep the tray icon monochrome white so Noctalia can tint it cleanly.
 ---
 diff --git a/src/devices/airpods.rs b/src/devices/airpods.rs
 index f0e876c..ff639e5 100644
@@ -195,3 +188,186 @@ index f43f575..841a083 100644
      };
  
      let session = bluer::Session::new().await?;
+diff --git a/src/ui/tray.rs b/src/ui/tray.rs
+index b3adbc5..8cbd8ff 100644
+--- a/src/ui/tray.rs
++++ b/src/ui/tray.rs
+@@ -31,7 +31,13 @@ impl ksni::Tray for MyTray {
+         env!("CARGO_PKG_NAME").into()
+     }
+     fn title(&self) -> String {
+-        "AirPods".into()
++        if self.battery_headphone_status != Some(BatteryStatus::Disconnected)
++            && self.battery_headphone.is_some()
++        {
++            "AirPods Max".into()
++        } else {
++            "AirPods".into()
++        }
+     }
+     fn icon_pixmap(&self) -> Vec<Icon> {
+         let text = {
+@@ -64,7 +70,8 @@ impl ksni::Tray for MyTray {
+                 "?".to_string()
+             }
+         };
+-        let any_bud_charging = matches!(self.battery_l_status, Some(BatteryStatus::Charging))
++        let any_bud_charging = matches!(self.battery_headphone_status, Some(BatteryStatus::Charging))
++            || matches!(self.battery_l_status, Some(BatteryStatus::Charging))
+             || matches!(self.battery_r_status, Some(BatteryStatus::Charging));
+         let app_settings_path = get_app_settings_path();
+         let settings = std::fs::read_to_string(&app_settings_path)
+@@ -95,15 +102,27 @@ impl ksni::Tray for MyTray {
+                 }
+             };
+ 
+-        let l = format_component("L", self.battery_l, self.battery_l_status);
+-        let r = format_component("R", self.battery_r, self.battery_r_status);
+-        let c = format_component("C", self.battery_c, self.battery_c_status);
++        let description = if self.battery_headphone_status != Some(BatteryStatus::Disconnected)
++            && self.battery_headphone.is_some()
++        {
++            let status_icon = match self.battery_headphone_status {
++                Some(BatteryStatus::Charging) => "󰂄",
++                Some(BatteryStatus::NotCharging) => "󰁹",
++                _ => "󰂑",
++            };
++            format!("{} {}%", status_icon, self.battery_headphone.unwrap_or_default())
++        } else {
++            let l = format_component("L", self.battery_l, self.battery_l_status);
++            let r = format_component("R", self.battery_r, self.battery_r_status);
++            let c = format_component("C", self.battery_c, self.battery_c_status);
++            format!("{} {} {}", l, r, c)
++        };
+ 
+         ToolTip {
+             icon_name: "".to_string(),
+             icon_pixmap: vec![],
+             title: "Battery Status".to_string(),
+-            description: format!("{} {} {}", l, r, c),
++            description,
+         }
+     }
+     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
+@@ -222,6 +241,9 @@ fn generate_icon(text: &str, text_mode: bool, charging: bool) -> Icon {
+         let inner_radius = 22.0;
+         let outer_radius = 28.0;
+ 
++        let inactive_ring_color = Rgba([255u8, 255u8, 255u8, 96u8]);
++        let active_ring_color = Rgba([255u8, 255u8, 255u8, 255u8]);
++
+         // ring background
+         for y in 0..height {
+             for x in 0..width {
+@@ -229,7 +251,7 @@ fn generate_icon(text: &str, text_mode: bool, charging: bool) -> Icon {
+                 let dy = y as f32 - center_y;
+                 let dist = (dx * dx + dy * dy).sqrt();
+                 if dist > inner_radius && dist <= outer_radius {
+-                    img.put_pixel(x, y, Rgba([128u8, 128u8, 128u8, 255u8]));
++                    img.put_pixel(x, y, inactive_ring_color);
+                 }
+             }
+         }
+@@ -245,7 +267,7 @@ fn generate_icon(text: &str, text_mode: bool, charging: bool) -> Icon {
+                     let angle_from_top =
+                         (angle + std::f32::consts::PI / 2.0).rem_euclid(2.0 * std::f32::consts::PI);
+                     if angle_from_top <= percentage * 2.0 * std::f32::consts::PI {
+-                        img.put_pixel(x, y, Rgba([0u8, 255u8, 0u8, 255u8]));
++                        img.put_pixel(x, y, active_ring_color);
+                     }
+                 }
+             }
+@@ -253,7 +275,7 @@ fn generate_icon(text: &str, text_mode: bool, charging: bool) -> Icon {
+         if charging {
+             let emoji = "⚡";
+             let scale = PxScale::from(48.0);
+-            let color = Rgba([0u8, 255u8, 0u8, 255u8]);
++            let color = active_ring_color;
+             let scaled_font = font.as_scaled(scale);
+             let mut emoji_width = 0.0;
+             for c in emoji.chars() {
+@@ -267,11 +289,7 @@ fn generate_icon(text: &str, text_mode: bool, charging: bool) -> Icon {
+     } else {
+         // battery text
+         let scale = PxScale::from(48.0);
+-        let color = if charging {
+-            Rgba([0u8, 255u8, 0u8, 255u8])
+-        } else {
+-            Rgba([255u8, 255u8, 255u8, 255u8])
+-        };
++        let color = Rgba([255u8, 255u8, 255u8, 255u8]);
+ 
+         let scaled_font = font.as_scaled(scale);
+         let mut text_width = 0.0;
+diff --git a/src/ui/window.rs b/src/ui/window.rs
+index 4574b97..346333a 100644
+--- a/src/ui/window.rs
++++ b/src/ui/window.rs
+@@ -3,7 +3,7 @@ use crate::bluetooth::aacp::{
+ };
+ use crate::bluetooth::managers::DeviceManagers;
+ use crate::devices::enums::{
+-    AirPodsNoiseControlMode, AirPodsState, DeviceData, DeviceState, DeviceType, NothingAncMode,
++    AirPodsNoiseControlMode, AirPodsState, DeviceData, DeviceInformation, DeviceState, DeviceType, NothingAncMode,
+     NothingState,
+ };
+ use crate::ui::airpods::airpods_view;
+@@ -687,16 +687,28 @@ impl App {
+                                     match self.device_states.get(mac) {
+                                         Some(DeviceState::AirPods(state)) => {
+                                             let b = &state.battery;
+-                                            let headphone = b.iter().find(|x| x.component == BatteryComponent::Headphone)
+-                                                .map(|x| x.level);
+-                                            // if headphones is not None, use only that
+-                                            if let Some(level) = headphone {
+-                                                let charging = b.iter().find(|x| x.component == BatteryComponent::Headphone)
+-                                                    .map(|x| x.status == BatteryStatus::Charging).unwrap_or(false);
+-                                                format!(
+-                                                    "􀺹 {}%{}",
+-                                                    level, if charging {"\u{1002E6}"} else {""}
+-                                                )
++                                            let headphone = b.iter().find(|x| x.component == BatteryComponent::Headphone);
++                                            let is_airpods_max = devices_list
++                                                .get(mac)
++                                                .and_then(|device| device.information.as_ref())
++                                                .and_then(|info| match info {
++                                                    DeviceInformation::AirPods(info) => Some(info.model_number.as_str()),
++                                                    _ => None,
++                                                })
++                                                .map(|model| matches!(model, "A2096" | "A3183" | "A3184"))
++                                                .unwrap_or(false);
++                                            // If headphone battery is present, use the single-battery indicator.
++                                            // AirPods Max are a single-battery headset, so don't fall back to
++                                            // the earbud L/R/C indicator while waiting for the first battery event.
++                                            if let Some(headphone) = headphone {
++                                                let status_icon = match headphone.status {
++                                                    BatteryStatus::Charging => "󰂄",
++                                                    BatteryStatus::NotCharging => "󰁹",
++                                                    BatteryStatus::Disconnected => "󰂑",
++                                                };
++                                                format!("{} {}%", status_icon, headphone.level)
++                                            } else if is_airpods_max {
++                                                "󰂑 ?".to_string()
+                                             } else {
+                                                 let left  = b.iter().find(|x| x.component == BatteryComponent::Left)
+                                                     .map(|x| x.level).unwrap_or_default();
+@@ -787,7 +799,18 @@ impl App {
+                     let mut devices_vec: Vec<(String, DeviceData)> = devices_list.clone().into_iter().collect();
+                     devices_vec.sort_by(|a, b| a.1.name.cmp(&b.1.name));
+                     for (mac, device) in devices_vec {
+-                        let name = device.name.clone();
++                        let is_airpods_max = device.information.as_ref()
++                            .and_then(|info| match info {
++                                DeviceInformation::AirPods(info) => Some(info.model_number.as_str()),
++                                _ => None,
++                            })
++                            .map(|model| matches!(model, "A2096" | "A3183" | "A3184"))
++                            .unwrap_or(false);
++                        let name = if is_airpods_max {
++                            "AirPods Max".to_string()
++                        } else {
++                            device.name.clone()
++                        };
+                         let tab_button = create_tab_button(
+                             Tab::Device(mac.clone()),
+                             &name,
