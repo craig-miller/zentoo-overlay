@@ -5,7 +5,7 @@ EAPI=8
 
 inherit meson
 
-MY_COMMIT="773e322418f904ffb9f0b1b4d378e7766bc1847e"
+MY_COMMIT="6379fe287bb02b0bb538ad155fe18b1bf8615daf"
 
 DESCRIPTION="Login greeter matching the Noctalia Wayland shell"
 HOMEPAGE="https://noctalia.dev/ https://github.com/noctalia-dev/noctalia-greeter"
@@ -15,10 +15,14 @@ S="${WORKDIR}/${PN}-${MY_COMMIT}"
 
 LICENSE="MIT"
 SLOT="0"
-KEYWORDS=""
+KEYWORDS="~arm64"
 
 DEPEND="
+	dev-cpp/nlohmann_json
+	dev-cpp/tomlplusplus
 	dev-libs/glib:2
+	dev-libs/libinput
+	dev-libs/stb
 	dev-libs/wayland
 	gnome-base/librsvg:2
 	gui-libs/wlroots:0.20
@@ -45,10 +49,6 @@ BDEPEND="
 "
 
 DOCS=( README.md )
-
-PATCHES=(
-	"${FILESDIR}"/noctalia-greeter-zentoo-theme.patch
-)
 
 src_install() {
 	meson_src_install
