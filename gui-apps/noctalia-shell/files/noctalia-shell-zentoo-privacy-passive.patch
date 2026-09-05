@@ -1,8 +1,8 @@
 diff --git a/src/pipewire/pipewire_service.cpp b/src/pipewire/pipewire_service.cpp
-index 8d9505eab..6ba59387f 100644
+index 6861c7aeb..53080bc22 100644
 --- a/src/pipewire/pipewire_service.cpp
 +++ b/src/pipewire/pipewire_service.cpp
-@@ -622,8 +622,17 @@ namespace {
+@@ -634,8 +634,14 @@ namespace {
      return std::ranges::contains(kMicrophoneSourceClasses, nd.mediaClass);
    }
  
@@ -11,13 +11,10 @@ index 8d9505eab..6ba59387f 100644
 +  // 3-channel RawMics source into a polished mono effect_output — keep a permanent
 +  // link to the raw source but capture nothing on their own. Without this exclusion,
 +  // the privacy widget reports the microphone as in-use for the whole session even
-+  // when no app is recording. stream.capture.sink would also engage the existing
-+  // opt-out path but misrepresents these nodes as sink monitors and confuses other
-+  // PipeWire tools (pavucontrol, OBS, wpctl); node.passive is the accurate signal.
++  // when no app is recording.
    [[nodiscard]] bool isAudioCaptureConsumer(const PipeWireService::NodeData& nd) {
 -    return std::ranges::contains(kAudioCaptureConsumerClasses, nd.mediaClass) && !nd.streamCaptureSink;
-+    return std::ranges::contains(kAudioCaptureConsumerClasses, nd.mediaClass)
-+        && !nd.streamCaptureSink && !nd.nodePassive;
++    return std::ranges::contains(kAudioCaptureConsumerClasses, nd.mediaClass) && !nd.streamCaptureSink && !nd.nodePassive;
    }
  
    [[nodiscard]] bool isCameraSource(const PipeWireService::NodeData& nd) {

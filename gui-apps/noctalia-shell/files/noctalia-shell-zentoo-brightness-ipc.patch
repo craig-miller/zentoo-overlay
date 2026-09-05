@@ -1,47 +1,136 @@
 diff --git a/src/app/application_ipc.cpp b/src/app/application_ipc.cpp
-index f4e37ed47..bded60d93 100644
+index 71ce82add..cdb8a3c26 100644
 --- a/src/app/application_ipc.cpp
 +++ b/src/app/application_ipc.cpp
-@@ -91,6 +91,9 @@
+@@ -93,6 +93,7 @@
  #include "util/string_utils.h"
  
  #include <algorithm>
-+// zentoo fix: <charconv> for std::from_chars in the brightness-suppress IPC
-+// handler registered below (see the // zentoo fix: block near brightness-osd).
 +#include <charconv>
- #include <chrono>
  #include <cmath>
  #include <csignal>
-@@ -534,6 +537,32 @@ void Application::initIpc() {
-       },
-       "brightness-osd <value>", "Show brightness OSD without changing brightness"
-   );
-+  // zentoo fix: brightness-suppress <ms> — let an external caller (e.g.,
-+  // asahi-brightnessd, which mirrors ambient-light readings into hardware
-+  // brightness on its own cadence) silence the OSD for a bounded window
-+  // around its own brightness writes. Without this, every ALS update
-+  // pops the brightness OSD into view even though the user never asked
-+  // for a brightness change.
-+  m_ipcService.registerHandler(
-+      "brightness-suppress",
-+      [this](const std::string& args) -> std::string {
-+        const auto parts = noctalia::ipc::splitWords(args);
-+        if (parts.size() != 1) {
-+          return "error: brightness-suppress requires <milliseconds>\n";
-+        }
-+        int ms = 0;
-+        const auto& token = parts[0];
-+        const char* begin = token.data();
-+        const char* end = begin + token.size();
-+        const auto [ptr, ec] = std::from_chars(begin, end, ms);
-+        if (ec != std::errc() || ptr != end || ms < 0 || ms > 60000) {
-+          return "error: invalid duration (use milliseconds, 0..60000)\n";
-+        }
-+        m_brightnessOsd.suppressFor(std::chrono::milliseconds(ms));
-+        return "ok\n";
-+      },
-+      "brightness-suppress <milliseconds>", "Suppress the brightness OSD for the given duration"
-+  );
-   m_configService.registerIpc(m_ipcService);
-   scripting::PluginIpcRouter::instance().setPlatform(&m_compositorPlatform);
-   m_ipcService.registerHandler(
+ #include <cstdint>
+@@ -601,6 +602,24 @@ void Application::initIpc() {
+     m_brightnessOsd.showValue(*value);
+     return "ok\n";
+   });
++  m_ipcService.bind(noctalia::cli::msg::brightnessSuppress, [this](const std::string& args) -> std::string {
++    const auto parts = noctalia::ipc::splitWords(args);
++    if (parts.size() != 1) {
++      return "error: brightness-suppress requires <milliseconds>\n";
++    }
++
++    int ms = 0;
++    const auto& token = parts[0];
++    const char* begin = token.data();
++    const char* end = begin + token.size();
++    const auto [ptr, ec] = std::from_chars(begin, end, ms);
++    if (ec != std::errc() || ptr != end || ms < 0 || ms > 60000) {
++      return "error: invalid duration (use milliseconds, 0..60000)\n";
++    }
++
++    m_brightnessOsd.suppressFor(std::chrono::milliseconds(ms));
++    return "ok\n";
++  });
+   m_ipcService.bind(noctalia::cli::msg::volumeOsd, [this](const std::string& args) -> std::string {
+     const auto parts = noctalia::ipc::splitWords(args);
+     if (parts.size() > 1) {
+diff --git a/src/cli/schema_msg.h b/src/cli/schema_msg.h
+index 15cb2b113..3f1f6b7ec 100644
+--- a/src/cli/schema_msg.h
++++ b/src/cli/schema_msg.h
+@@ -115,6 +115,9 @@ namespace noctalia::cli {
+   inline constexpr std::array kMsgBrightnessOsdPositionals{
+       Positional{"value", {}, {}, true, false, false},
+   };
++  inline constexpr std::array kMsgBrightnessSuppressPositionals{
++      Positional{"milliseconds", {}, {}, true, false, false},
++  };
+   inline constexpr std::array kMsgBrightnessSetPositionals{
+       Positional{"target", {}, {}, false, false, false},
+       Positional{"value", {}, {}, true, false, false},
+@@ -305,6 +308,16 @@ namespace noctalia::cli {
+         {},
+         false
+     };
++    inline constexpr Command brightnessSuppress{
++        "brightness-suppress",
++        "Suppress the brightness OSD for the given duration",
++        {},
++        {},
++        {},
++        kMsgBrightnessSuppressPositionals,
++        {},
++        false
++    };
+     inline constexpr Command brightnessSet{"brightness-set",
+                                            "Set brightness (defaults to current monitor)",
+                                            {},
+@@ -825,6 +838,7 @@ namespace noctalia::cli {
+       msg::brightnessDown,
+       msg::brightnessListBacklightDevices,
+       msg::brightnessOsd,
++      msg::brightnessSuppress,
+       msg::brightnessSet,
+       msg::brightnessUp,
+       msg::caffeineDisable,
+diff --git a/src/shell/osd/brightness_osd.cpp b/src/shell/osd/brightness_osd.cpp
+index a76f08347..cf6c02e1a 100644
+--- a/src/shell/osd/brightness_osd.cpp
++++ b/src/shell/osd/brightness_osd.cpp
+@@ -4,6 +4,7 @@
+ #include "system/brightness_service.h"
+ 
+ #include <algorithm>
++#include <chrono>
+ #include <cmath>
+ #include <string>
+ 
+@@ -98,6 +99,10 @@ void BrightnessOsd::onBrightnessChanged(const BrightnessService& service) {
+     return;
+   }
+ 
++  if (std::chrono::steady_clock::now() < m_suppressedUntil) {
++    return;
++  }
++
+   if (m_batchDepth != 0) {
+     m_batchBrightness = changed->brightness;
+     return;
+@@ -114,3 +119,11 @@ void BrightnessOsd::showValue(float brightness) {
+   }
+   m_overlay->show(makeBrightnessContent(brightness));
+ }
++
++void BrightnessOsd::suppressFor(std::chrono::milliseconds duration) {
++  if (duration <= std::chrono::milliseconds::zero()) {
++    m_suppressedUntil = {};
++    return;
++  }
++  m_suppressedUntil = std::chrono::steady_clock::now() + duration;
++}
+diff --git a/src/shell/osd/brightness_osd.h b/src/shell/osd/brightness_osd.h
+index d7d9fda80..c377f897e 100644
+--- a/src/shell/osd/brightness_osd.h
++++ b/src/shell/osd/brightness_osd.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <chrono>
+ #include <cstddef>
+ #include <optional>
+ #include <string>
+@@ -16,6 +17,7 @@ public:
+   void endBatch();
+   void onBrightnessChanged(const BrightnessService& service);
+   void showValue(float brightness);
++  void suppressFor(std::chrono::milliseconds duration);
+ 
+ private:
+   struct DisplaySnapshot {
+@@ -27,4 +29,5 @@ private:
+   std::vector<DisplaySnapshot> m_snapshots;
+   std::size_t m_batchDepth = 0;
+   std::optional<float> m_batchBrightness;
++  std::chrono::steady_clock::time_point m_suppressedUntil{};
+ };

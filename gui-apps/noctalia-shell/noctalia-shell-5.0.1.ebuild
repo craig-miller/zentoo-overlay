@@ -5,7 +5,7 @@ EAPI=8
 
 inherit meson optfeature
 
-MY_COMMIT="14ec268fc5833fa34e4b1e25ffc8762545bbdf5f"
+MY_COMMIT="f95e95cafde8c23f1d3a62b969e2b5717c96d741"
 
 DESCRIPTION="A lightweight Wayland shell and bar built directly on Wayland + OpenGL ES"
 HOMEPAGE="https://noctalia.dev/ https://github.com/noctalia-dev/noctalia"
@@ -20,12 +20,21 @@ KEYWORDS="~arm64"
 IUSE="+jemalloc"
 
 DEPEND="
-	dev-libs/glib:2
-	dev-libs/libxml2
+	app-crypt/libsecret
+	dev-cpp/nlohmann_json
 	dev-cpp/sdbus-c++
+	dev-cpp/tomlplusplus
+	dev-libs/glib:2
+	dev-libs/libical
+	dev-libs/libsodium
+	dev-libs/libxml2
+	dev-libs/md4c
 	media-libs/fontconfig
 	media-libs/freetype
+	media-libs/harfbuzz
+	media-libs/libjxl
 	media-libs/libwebp
+	media-libs/libsndfile
 	gnome-base/librsvg:2
 	media-video/pipewire
 	media-video/wireplumber
@@ -58,8 +67,6 @@ DOCS=( README.md CREDITS.md example.toml )
 PATCHES=(
 	"${FILESDIR}"/noctalia-shell-zentoo-brightness-ipc.patch
 	"${FILESDIR}"/noctalia-shell-zentoo-privacy-passive.patch
-	"${FILESDIR}"/noctalia-shell-zentoo-privacy-xdpw.patch
-	"${FILESDIR}"/noctalia-shell-zentoo-templates-follow-symlinks.patch
 )
 
 src_configure() {
